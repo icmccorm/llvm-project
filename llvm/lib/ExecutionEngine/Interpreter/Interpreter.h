@@ -24,10 +24,9 @@
 namespace llvm {
 
 class IntrinsicLowering;
-template<typename T> class generic_gep_type_iterator;
+template <typename T> class generic_gep_type_iterator;
 class ConstantExpr;
 typedef generic_gep_type_iterator<User::const_op_iterator> gep_type_iterator;
-
 
 // AllocaHolder - Object to track all of the blocks of memory allocated by
 // alloca.  When the function returns, this object is popped off the execution
@@ -51,37 +50,69 @@ public:
   void add(void *Mem) { Allocations.push_back(Mem); }
 };
 
+class MiriAllocaHolder {
+  std::vector<MiriPointer> MiriAllocations;
+  MiriFreeHook MiriFree;
+  void *MiriWrapper;
+
+public:
+  MiriAllocaHolder(void *Wrapper, MiriFreeHook Free) {
+    MiriWrapper = Wrapper;
+    MiriFree = Free;
+  }
+  // Make this type move-only.
+  MiriAllocaHolder(MiriAllocaHolder &&) = default;
+  MiriAllocaHolder &operator=(MiriAllocaHolder &&RHS) = default;
+
+  ~MiriAllocaHolder() {
+    for (MiriPointer Tracked : MiriAllocations)
+      MiriFree(MiriWrapper, Tracked);
+  }
+
+  void add(MiriPointer Tracked) { MiriAllocations.push_back(Tracked); }
+};
+
 typedef std::vector<GenericValue> ValuePlaneTy;
 
 // ExecutionContext struct - This struct represents one stack frame currently
 // executing.
 //
 struct ExecutionContext {
-  Function             *CurFunction;// The currently executing function
-  BasicBlock           *CurBB;      // The currently executing BB
-  BasicBlock::iterator  CurInst;    // The next instruction to execute
-  CallBase             *Caller;     // Holds the call that called subframes.
-                                    // NULL if main func or debugger invoked fn
+  Function *CurFunction;        // The currently executing function
+  BasicBlock *CurBB;            // The currently executing BB
+  BasicBlock::iterator CurInst; // The next instruction to execute
+  CallBase *Caller;             // Holds the call that called subframes.
+                                // NULL if main func or debugger invoked fn
   std::map<Value *, GenericValue> Values; // LLVM values used in this invocation
-  std::vector<GenericValue>  VarArgs; // Values passed through an ellipsis
-  AllocaHolder Allocas;            // Track memory allocated by alloca
+  std::vector<GenericValue> VarArgs;      // Values passed through an ellipsis
+  AllocaHolder Allocas;                   // Track memory allocated by alloca
+  MiriAllocaHolder MiriAllocas;
+  ExecutionContext(void *Wrapper, MiriFreeHook MiriFree)
+      : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr),
+        MiriAllocas(Wrapper, MiriFree) {}
+};
 
-  ExecutionContext() : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr) {}
+class ExecutionPath {
+public:
+  // The runtime stack of executing code.  The top of the stack is the current
+  // function record.
+  std::vector<ExecutionContext> ECStack;
+  GenericValue ExitValue; // The return value of the called function
+  ExecutionPath() { memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped)); }
 };
 
 // Interpreter - This class represents the entirety of the interpreter.
 //
 class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
-  GenericValue ExitValue;          // The return value of the called function
   IntrinsicLowering *IL;
-
-  // The runtime stack of executing code.  The top of the stack is the current
-  // function record.
-  std::vector<ExecutionContext> ECStack;
 
   // AtExitHandlers - List of functions to call when the program exits,
   // registered with the atexit() library function.
-  std::vector<Function*> AtExitHandlers;
+  std::vector<Function *> AtExitHandlers;
+
+  std::vector<ExecutionPath> ExecutionPaths;
+
+  std::vector<MiriErrorTrace> StackTrace;
 
 public:
   explicit Interpreter(std::unique_ptr<Module> M);
@@ -92,9 +123,7 @@ public:
   ///
   void runAtExitHandlers();
 
-  static void Register() {
-    InterpCtor = create;
-  }
+  static void Register() { InterpCtor = create; }
 
   /// Create an interpreter ExecutionEngine.
   ///
@@ -112,10 +141,49 @@ public:
     return nullptr;
   }
 
+  ExecutionContext &context() { return ExecutionPaths.back().ECStack.back(); }
+  ExecutionPath &path() { return ExecutionPaths.back(); }
+
+  GenericValue *getCurrentExitValue() {
+    return &ExecutionPaths.back().ExitValue;
+  }
+
+  void setExitValue(GenericValue Val) { ExecutionPaths.back().ExitValue = Val; }
+
+  void pushPath() { ExecutionPaths.push_back(ExecutionPath()); }
+
+  void registerMiriErrorWithoutLocation();
+
+  void registerMiriError(Instruction &I);
+
+  GenericValue popPath() {
+    GenericValue Res = ExecutionPaths.back().ExitValue;
+    ExecutionPaths.pop_back();
+    return Res;
+  }
+
+  void popContext() { ExecutionPaths.back().ECStack.pop_back(); }
+
+  std::vector<ExecutionContext> &currentStack() {
+    return ExecutionPaths.back().ECStack;
+  }
+
+  bool stackIsEmpty() { return ExecutionPaths.back().ECStack.empty(); }
+
+  size_t stackSize() { return ExecutionPaths.back().ECStack.size(); }
+
+  void clearStack() { ExecutionPaths.back().ECStack.clear(); }
+
+  void clearPaths() { ExecutionPaths.clear(); }
+
+  bool pathsAreEmpty() { return ExecutionPaths.empty(); }
+
+  // a method to get the back of the current context stack:
+
   // Methods used to execute code:
   // Place a call on the stack
   void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
-  void run();                // Execute instructions until nothing left to do
+  void run(); // Execute instructions until nothing left to do
 
   // Opcode Implementations
   void visitReturnInst(ReturnInst &I);
@@ -174,17 +242,20 @@ public:
 
   GenericValue callExternalFunction(Function *F,
                                     ArrayRef<GenericValue> ArgVals);
+
+  GenericValue CallMiriFunctionByName(Function *F,
+                                      ArrayRef<GenericValue> ArgVals);
+  GenericValue CallMiriFunctionByPointer(FunctionType *FType,
+                                         GenericValue FuncPtr,
+                                         ArrayRef<GenericValue> ArgVals);
+
   void exitCalled(GenericValue GV);
 
-  void addAtExitHandler(Function *F) {
-    AtExitHandlers.push_back(F);
-  }
+  void addAtExitHandler(Function *F) { AtExitHandlers.push_back(F); }
 
-  GenericValue *getFirstVarArg () {
-    return &(ECStack.back ().VarArgs[0]);
-  }
+  GenericValue *getFirstVarArg() { return &(this->context().VarArgs[0]); }
 
-private:  // Helper functions
+private: // Helper functions
   GenericValue executeGEPOperation(Value *Ptr, gep_type_iterator I,
                                    gep_type_iterator E, ExecutionContext &SF);
 
@@ -194,9 +265,9 @@ private:  // Helper functions
   //
   void SwitchToNewBasicBlock(BasicBlock *Dest, ExecutionContext &SF);
 
-  void *getPointerToFunction(Function *F) override { return (void*)F; }
+  void *getPointerToFunction(Function *F) override { return (void *)F; }
 
-  void initializeExecutionEngine() { }
+  void initializeExecutionEngine() {}
   void initializeExternalFunctions();
   GenericValue getConstantExprValue(ConstantExpr *CE, ExecutionContext &SF);
   GenericValue getOperandValue(Value *V, ExecutionContext &SF);
@@ -227,9 +298,9 @@ private:  // Helper functions
   GenericValue executeCastOperation(Instruction::CastOps opcode, Value *SrcVal,
                                     Type *Ty, ExecutionContext &SF);
   void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result);
-
+  void passReturnValueToLowerStackFrame(Type *RetTy, GenericValue Result);
 };
 
-} // End llvm namespace
+} // namespace llvm
 
 #endif

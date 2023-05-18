@@ -303,8 +303,10 @@ GenericValue Interpreter::CallMiriFunctionByPointer(
       ExecutionEngine::MiriWrapper, MiriFuncPtr, ArgsArrayRef, FTypeRef);
   if (!ReturnVal) {
     Interpreter::registerMiriErrorWithoutLocation();
+    return GenericValue(0);
+  } else {
+    return *unwrap(ReturnVal);
   }
-  return *unwrap(ReturnVal);
 }
 
 GenericValue
@@ -323,8 +325,10 @@ Interpreter::CallMiriFunctionByName(Function *F,
                                   NamePtr, NameLength, FTypeRef);
   if (!ReturnVal) {
     Interpreter::registerMiriErrorWithoutLocation();
+    return GenericValue(0);
+  } else {
+    return *unwrap(ReturnVal);
   }
-  return *unwrap(ReturnVal);
 }
 
 GenericValue Interpreter::callExternalFunction(Function *F,

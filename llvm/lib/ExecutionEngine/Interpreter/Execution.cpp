@@ -1320,8 +1320,15 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   bool atBegin(Parent->begin() == Me);
   if (!atBegin)
     --Me;
-  IL->LowerIntrinsicCall(&I);
 
+  switch (I.getIntrinsicID()) {
+  case Intrinsic::objectsize:
+  case Intrinsic::is_constant:
+    break;
+  default: {
+    IL->LowerIntrinsicCall(&I);
+  } break;
+  }
   // Restore the CurInst pointer to the first instruction newly inserted, if
   // any.
   if (atBegin) {
@@ -2268,20 +2275,12 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE,
   GenericValue Op1 = getOperandValue(CE->getOperand(1), SF);
   GenericValue Dest;
   Type *Ty0 = CE->getOperand(0)->getType();
-  Type *Ty1 = CE->getOperand(1)->getType();
-  bool ShouldPassProvenance = Ty0->isPointerTy() && !Ty1->isPointerTy();
   switch (CE->getOpcode()) {
   case Instruction::Add:
     Dest.IntVal = Op0.IntVal + Op1.IntVal;
-    if (ShouldPassProvenance) {
-      Dest.Provenance = Op0.Provenance;
-    }
     break;
   case Instruction::Sub:
     Dest.IntVal = Op0.IntVal - Op1.IntVal;
-    if (ShouldPassProvenance) {
-      Dest.Provenance = Op0.Provenance;
-    }
     break;
   case Instruction::Mul:
     Dest.IntVal = Op0.IntVal * Op1.IntVal;

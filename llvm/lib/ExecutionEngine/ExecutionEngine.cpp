@@ -765,13 +765,8 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
         GenericValue GV = getConstantValue(Op0);
         uint64_t SrcAsInt = ExecutionEngine::MPtrToInt(
             ExecutionEngine::MiriWrapper, GVTOMiriPointer(GV));
-        if (SrcAsInt != 0) {
-          GV.IntVal = APInt(MIRI_POINTER_BIT_WIDTH, uintptr_t(SrcAsInt));
-          return GV;
-        } else {
-          ExecutionEngine::setMiriErrorFlag();
-          return GV;
-        }
+        GV.IntVal = APInt(MIRI_POINTER_BIT_WIDTH, uintptr_t(SrcAsInt));
+        return GV;
       } else {
         report_fatal_error("Miri is not initialized");
       }
@@ -781,12 +776,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
         GenericValue GV = getConstantValue(Op0);
         MiriPointer Converted = ExecutionEngine::MIntToPtr(
             ExecutionEngine::MiriWrapper, GV.IntVal.getZExtValue());
-        if (Converted.prov.alloc_id != 0) {
-          return MiriPointerTOGV(Converted);
-        } else {
-          ExecutionEngine::setMiriErrorFlag();
-          return GV;
-        }
+        return MiriPointerTOGV(Converted);
       } else {
         report_fatal_error("Miri is not initialized");
       }
@@ -995,9 +985,22 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       llvm_unreachable("Unknown constant pointer type!");
     }
     break;
+
   case Type::ScalableVectorTyID:
     report_fatal_error(
         "Scalable vector support not yet implemented in ExecutionEngine");
+  case Type::StructTyID: {
+    unsigned elemNum;
+    if (const ConstantStruct *CS = dyn_cast<ConstantStruct>(C)) {
+      elemNum = CS->getNumOperands();
+      Result.AggregateVal.resize(elemNum);
+      for (unsigned i = 0; i < elemNum; ++i) {
+        Result.AggregateVal[i] = getConstantValue(CS->getOperand(i));
+      }
+    } else {
+      llvm_unreachable("Unknown constant struct type!");
+    }
+  } break;
   case Type::FixedVectorTyID: {
     unsigned elemNum;
     Type *ElemTy;
@@ -1355,7 +1358,8 @@ void ExecutionEngine::InitializeMiriMemory(const Constant *Init, void *Addr,
     GenericValue Val = getConstantValue(Init);
     const unsigned StoreBytes =
         getDataLayout().getTypeStoreSize(Init->getType());
-    uint64_t StoreAlign = getDataLayout().getABITypeAlign(Init->getType()).value();
+    uint64_t StoreAlign =
+        getDataLayout().getABITypeAlign(Init->getType()).value();
     bool status = ExecutionEngine::StoreToMiriMemory(
         &Val, ResolvedMiriPointer, Init->getType(), StoreBytes, StoreAlign);
     if (status) {

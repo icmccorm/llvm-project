@@ -78,6 +78,10 @@ typedef std::vector<GenericValue> ValuePlaneTy;
 // executing.
 //
 struct ExecutionContext {
+  // Make this type move-only.
+  ExecutionContext(ExecutionContext &&) = default;
+  ExecutionContext &operator=(ExecutionContext &&RHS) = default;
+
   Function *CurFunction;        // The currently executing function
   BasicBlock *CurBB;            // The currently executing BB
   BasicBlock::iterator CurInst; // The next instruction to execute
@@ -93,12 +97,18 @@ struct ExecutionContext {
 };
 
 class ExecutionPath {
+
 public:
   // The runtime stack of executing code.  The top of the stack is the current
   // function record.
   std::vector<ExecutionContext> ECStack;
   GenericValue ExitValue; // The return value of the called function
+
   ExecutionPath() { memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped)); }
+
+  // Make this type move-only.
+  ExecutionPath(ExecutionPath &&) = default;
+  ExecutionPath &operator=(ExecutionPath &&RHS) = default;
 };
 
 // Interpreter - This class represents the entirety of the interpreter.
@@ -150,7 +160,7 @@ public:
 
   void setExitValue(GenericValue Val) { ExecutionPaths.back().ExitValue = Val; }
 
-  void pushPath() { ExecutionPaths.push_back(ExecutionPath()); }
+  void pushPath() { ExecutionPaths.emplace_back(); }
 
   void registerMiriErrorWithoutLocation();
 

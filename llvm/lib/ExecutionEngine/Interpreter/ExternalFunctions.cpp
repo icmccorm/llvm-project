@@ -134,6 +134,7 @@ static ExFunc lookupFunction(const Function *F) {
 }
 
 #ifdef USE_LIBFFI
+
 static ffi_type *ffiTypeFor(Type *Ty) {
   switch (Ty->getTypeID()) {
   case Type::VoidTyID:
@@ -149,18 +150,13 @@ static ffi_type *ffiTypeFor(Type *Ty) {
     case 64:
       return &ffi_type_sint64;
     }
-    llvm_unreachable("Unhandled integer type bitwidth");
   case Type::FloatTyID:
     return &ffi_type_float;
   case Type::DoubleTyID:
     return &ffi_type_double;
-  case Type::PointerTyID:
-    return &ffi_type_pointer;
   default:
     break;
   }
-  // TODO: Support other types such as StructTyID, ArrayTyID, OpaqueTyID, etc.
-  report_fatal_error("Type could not be mapped for use with libffi.");
   return NULL;
 }
 
@@ -189,7 +185,6 @@ static void *ffiValueFor(Type *Ty, const GenericValue &AV, void *ArgDataPtr) {
       return ArgDataPtr;
     }
     }
-    llvm_unreachable("Unhandled integer type bitwidth");
   case Type::FloatTyID: {
     float *FloatPtr = (float *)ArgDataPtr;
     *FloatPtr = AV.FloatVal;
@@ -200,16 +195,9 @@ static void *ffiValueFor(Type *Ty, const GenericValue &AV, void *ArgDataPtr) {
     *DoublePtr = AV.DoubleVal;
     return ArgDataPtr;
   }
-  case Type::PointerTyID: {
-    void **PtrPtr = (void **)ArgDataPtr;
-    *PtrPtr = GVTOP(AV);
-    return ArgDataPtr;
-  }
   default:
     break;
   }
-  // TODO: Support other types such as StructTyID, ArrayTyID, OpaqueTyID, etc.
-  report_fatal_error("Type value could not be mapped for use with libffi.");
   return NULL;
 }
 
@@ -217,6 +205,9 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
                       const DataLayout &TD, GenericValue &Result) {
   ffi_cif cif;
   FunctionType *FTy = F->getFunctionType();
+  if(ffiTypeFor(FTy->getReturnType()) == nullptr){
+    return false;
+  }
   const unsigned NumArgs = F->arg_size();
 
   // TODO: We don't have type information about the remaining arguments, because
@@ -233,7 +224,11 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
        A != E; ++A) {
     const unsigned ArgNo = A->getArgNo();
     Type *ArgTy = FTy->getParamType(ArgNo);
-    args[ArgNo] = ffiTypeFor(ArgTy);
+    ffi_type* ffi_type = ffiTypeFor(ArgTy);
+    if(ffi_type == nullptr){
+      return false;
+    }
+    args[ArgNo] = ffi_type;
     ArgBytes += TD.getTypeStoreSize(ArgTy);
   }
 
@@ -245,7 +240,11 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
        A != E; ++A) {
     const unsigned ArgNo = A->getArgNo();
     Type *ArgTy = FTy->getParamType(ArgNo);
-    values[ArgNo] = ffiValueFor(ArgTy, ArgVals[ArgNo], ArgDataPtr);
+    void *ffi_value = ffiValueFor(ArgTy, ArgVals[ArgNo], ArgDataPtr);
+    if(ffi_value == nullptr){
+      return false;
+    }
+    values[ArgNo] = ffi_value;
     ArgDataPtr += TD.getTypeStoreSize(ArgTy);
   }
 
@@ -280,9 +279,6 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
       break;
     case Type::DoubleTyID:
       Result.DoubleVal = *(double *)ret.data();
-      break;
-    case Type::PointerTyID:
-      Result.PointerVal = *(void **)ret.data();
       break;
     default:
       break;

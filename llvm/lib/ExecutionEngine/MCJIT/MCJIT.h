@@ -314,6 +314,12 @@ public:
   uint64_t getSymbolAddress(const std::string &Name,
                             bool CheckFunctionsOnly);
 
+  GenericValue *createThread(uint64_t NextThreadID, Function *F,
+                                        ArrayRef<GenericValue> ArgValues);
+                                        
+  bool stepThread(uint64_t ThreadID); // Execute a single instruction
+  bool hasThread(uint64_t ThreadID);
+  void terminateThread(uint64_t ThreadID);
 protected:
   /// emitObject -- Generate a JITed object in memory from the specified module
   /// Currently, MCJIT only supports a single module and the module passed to

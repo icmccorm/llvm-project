@@ -232,6 +232,20 @@ void LLVMExecutionEngineSetMiriIntToPtr(LLVMExecutionEngineRef EE,
 void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
                                         MiriPtrToInt IncomingPtrToInt);
 
+LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
+                                   uint64_t ThreadID);
+
+LLVMGenericValueRef
+LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
+                                uint64_t ThreadID, LLVMValueRef F,
+                                unsigned NumArgs, LLVMGenericValueRef *Args);
+
+LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,
+                                      uint64_t ThreadID);
+
+void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
+                                            uint64_t ThreadID);
+
 /*===-- Operations on memory managers -------------------------------------===*/
 
 typedef uint8_t *(*LLVMMemoryManagerAllocateCodeSectionCallback)(

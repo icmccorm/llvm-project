@@ -490,6 +490,41 @@ void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
   ExecEngine->setMiriPtrToInt(IncomingPtrToInt);
 }
 
+
+LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
+                                   uint64_t ThreadID) {
+  auto *ExecEngine = unwrap(EE);
+  return ExecEngine->stepThread(ThreadID);
+}
+
+LLVMGenericValueRef
+LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
+                                uint64_t ThreadID, LLVMValueRef F,
+                                unsigned NumArgs, LLVMGenericValueRef *Args) {
+                                    unwrap(EE)->finalizeObject();
+  auto *ExecEngine = unwrap(EE);
+  ExecEngine->finalizeObject();
+
+  std::vector<GenericValue> ArgVec;
+  ArgVec.reserve(NumArgs);
+  for (unsigned I = 0; I != NumArgs; ++I)
+    ArgVec.push_back(*unwrap(Args[I]));
+
+  return wrap(ExecEngine->createThread(ThreadID, unwrap<Function>(F), ArgVec));
+}
+
+LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,
+                                      uint64_t ThreadID) {
+  auto *ExecEngine = unwrap(EE);
+  return ExecEngine->hasThread(ThreadID);
+}
+
+void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
+                                            uint64_t ThreadID) {
+  auto *ExecEngine = unwrap(EE);
+  ExecEngine->terminateThread(ThreadID);
+}
+
 /*===-- Operations on memory managers -------------------------------------===*/
 
 namespace {

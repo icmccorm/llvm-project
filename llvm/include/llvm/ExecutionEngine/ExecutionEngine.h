@@ -582,6 +582,12 @@ public:
            MiriFree && MMemset && MMemcpy && MIntToPtr && MPtrToInt;
   }
 
+  GenericValue *createThread(uint64_t NextThreadID, Function *F,
+                                        ArrayRef<GenericValue> ArgValues);
+                                        
+  bool stepThread(uint64_t ThreadID); // Execute a single instruction
+  bool hasThread(uint64_t ThreadID);
+  void terminateThread(uint64_t ThreadID);
 protected:
   ExecutionEngine(DataLayout DL) : DL(std::move(DL)) {}
   explicit ExecutionEngine(DataLayout DL, std::unique_ptr<Module> M);

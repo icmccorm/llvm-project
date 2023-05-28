@@ -69,12 +69,38 @@ void Interpreter::runAtExitHandlers() {
   }
 }
 
-/// run - Start execution with the specified function and arguments.
-///
+GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
+                                        ArrayRef<GenericValue> ArgValues) {
+  assert(F && "Function *F was null at entry to run()");
+  Interpreter::createThreadContext(NextThreadID);
+  uint64_t PrevThread = Interpreter::switchThread(NextThreadID);
+
+  const size_t ArgCount = F->getFunctionType()->getNumParams();
+  ArrayRef<GenericValue> ActualArgs =
+      ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
+  // Set up the function call.
+  callFunction(F, ActualArgs);
+  GenericValue *ReturnValRef = &Interpreter::getCurrentThread()->ExitValue;
+  Interpreter::switchThread(PrevThread);
+  return ReturnValRef;
+}
+
+bool Interpreter::stepThread(uint64_t ThreadID) {
+  Interpreter::switchThread(ThreadID);
+
+  // Interpret a single instruction & increment the "PC".
+  ExecutionContext &SF = Interpreter::context(); // Current stack frame
+  Instruction &I = *SF.CurInst++;                // Increment before execute
+
+  LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
+  visit(I); // Dispatch to one of the visit* methods...
+
+  return Interpreter::stackIsEmpty();
+}
+
 GenericValue Interpreter::runFunction(Function *F,
                                       ArrayRef<GenericValue> ArgValues) {
   assert(F && "Function *F was null at entry to run()");
-  Interpreter::pushPath();
 
   // Try extra hard not to pass extra args to a function that isn't
   // expecting them.  C programmers frequently bend the rules and
@@ -93,13 +119,13 @@ GenericValue Interpreter::runFunction(Function *F,
   // Start executing the function.
   run();
 
-  return Interpreter::popPath();
+  return *Interpreter::getCurrentExitValue();
 }
 
 void Interpreter::registerMiriErrorWithoutLocation() {
   ExecutionEngine::setMiriErrorFlag();
-  ExecutionPath &CurrentPath = ExecutionPaths.back();
-  for (ExecutionContext &CurrContext : CurrentPath.ECStack) {
+  ExecutionPath *CurrentPath = Interpreter::getCurrentThread();
+  for (ExecutionContext &CurrContext : CurrentPath->ECStack) {
     if (CurrContext.Caller) {
       DILocation *Loc = CurrContext.Caller->getDebugLoc();
       if (Loc) {

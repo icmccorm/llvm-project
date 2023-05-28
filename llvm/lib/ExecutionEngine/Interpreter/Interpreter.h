@@ -21,6 +21,7 @@
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include <unordered_map>
 namespace llvm {
 
 class IntrinsicLowering;
@@ -105,7 +106,7 @@ public:
   GenericValue ExitValue; // The return value of the called function
 
   ExecutionPath() { memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped)); }
-
+  uint64_t ThreadID;
   // Make this type move-only.
   ExecutionPath(ExecutionPath &&) = default;
   ExecutionPath &operator=(ExecutionPath &&RHS) = default;
@@ -119,10 +120,10 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   // AtExitHandlers - List of functions to call when the program exits,
   // registered with the atexit() library function.
   std::vector<Function *> AtExitHandlers;
-
-  std::vector<ExecutionPath> ExecutionPaths;
-
   std::vector<MiriErrorTrace> StackTrace;
+
+  std::unordered_map<uint64_t, ExecutionPath> Threads;
+  uint64_t CurrentThreadID;
 
 public:
   explicit Interpreter(std::unique_ptr<Module> M);
@@ -151,50 +152,67 @@ public:
     return nullptr;
   }
 
-  ExecutionContext &context() { return ExecutionPaths.back().ECStack.back(); }
-  ExecutionPath &path() { return ExecutionPaths.back(); }
+  ExecutionContext &context() { return getCurrentThread()->ECStack.back(); }
 
-  GenericValue *getCurrentExitValue() {
-    return &ExecutionPaths.back().ExitValue;
+  GenericValue *getCurrentExitValue() { return &getCurrentThread()->ExitValue; }
+
+  void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
+
+  void createThreadContext(uint64_t ThreadID) {
+    Threads[ThreadID] = ExecutionPath();
   }
 
-  void setExitValue(GenericValue Val) { ExecutionPaths.back().ExitValue = Val; }
+  uint64_t switchThread(uint64_t ThreadID) {
+    uint64_t OldThreadID = CurrentThreadID;
+    CurrentThreadID = ThreadID;
+    return OldThreadID;
+  }
 
-  void pushPath() { ExecutionPaths.emplace_back(); }
+  ExecutionPath *getCurrentThread() {
+    ExecutionPath *CurrThread = getThread(CurrentThreadID);
+    if (CurrThread == nullptr) {
+      llvm_unreachable("Current thread not found");
+    } else {
+      return CurrThread;
+    }
+  }
+
+  void terminateThread(uint64_t ThreadID) {
+    Threads.erase(ThreadID);
+  }
+
+  ExecutionPath *getThread(uint64_t ThreadID) {
+    auto it = Threads.find(ThreadID);
+    if (it == Threads.end())
+      return nullptr;
+    return &it->second;
+  }
 
   void registerMiriErrorWithoutLocation();
 
   void registerMiriError(Instruction &I);
 
-  GenericValue popPath() {
-    GenericValue Res = ExecutionPaths.back().ExitValue;
-    ExecutionPaths.pop_back();
-    return Res;
-  }
-
-  void popContext() { ExecutionPaths.back().ECStack.pop_back(); }
+  void popContext() { Interpreter::getCurrentThread()->ECStack.pop_back(); }
 
   std::vector<ExecutionContext> &currentStack() {
-    return ExecutionPaths.back().ECStack;
+    return getCurrentThread()->ECStack;
   }
 
-  bool stackIsEmpty() { return ExecutionPaths.back().ECStack.empty(); }
+  bool stackIsEmpty() { return getCurrentThread()->ECStack.empty(); }
 
-  size_t stackSize() { return ExecutionPaths.back().ECStack.size(); }
+  size_t stackSize() { return getCurrentThread()->ECStack.size(); }
 
-  void clearStack() { ExecutionPaths.back().ECStack.clear(); }
-
-  void clearPaths() { ExecutionPaths.clear(); }
-
-  bool pathsAreEmpty() { return ExecutionPaths.empty(); }
-
-  // a method to get the back of the current context stack:
+  void clearStack() { getCurrentThread()->ECStack.clear(); }
 
   // Methods used to execute code:
   // Place a call on the stack
-  void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
-  void run(); // Execute instructions until nothing left to do
 
+  void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
+  void run();                   // Execute instructions until nothing left to do
+  GenericValue *createThread(uint64_t NextThreadID, Function *F,
+                                        ArrayRef<GenericValue> ArgValues);
+  bool stepThread(uint64_t ThreadID); // Execute a single instruction
+  bool hasThread(uint64_t ThreadID);
   // Opcode Implementations
   void visitReturnInst(ReturnInst &I);
   void visitBranchInst(BranchInst &I);

@@ -315,11 +315,10 @@ public:
                             bool CheckFunctionsOnly);
 
   GenericValue *createThread(uint64_t NextThreadID, Function *F,
-                                        ArrayRef<GenericValue> ArgValues);
-                                        
-  bool stepThread(uint64_t ThreadID); // Execute a single instruction
-  bool hasThread(uint64_t ThreadID);
-  void terminateThread(uint64_t ThreadID);
+            ArrayRef<GenericValue> ArgValues) override;
+  bool stepThread(uint64_t ThreadID) override; // Execute a single instruction
+  bool hasThread(uint64_t ThreadID) override;
+  void terminateThread(uint64_t ThreadID) override;
 protected:
   /// emitObject -- Generate a JITed object in memory from the specified module
   /// Currently, MCJIT only supports a single module and the module passed to

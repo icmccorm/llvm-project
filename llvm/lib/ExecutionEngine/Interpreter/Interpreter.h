@@ -97,19 +97,21 @@ struct ExecutionContext {
         MiriAllocas(Wrapper, MiriFree) {}
 };
 
-class ExecutionPath {
+class ExecutionThread {
 
 public:
   // The runtime stack of executing code.  The top of the stack is the current
   // function record.
   std::vector<ExecutionContext> ECStack;
   GenericValue ExitValue; // The return value of the called function
-
-  ExecutionPath() { memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped)); }
+  Type *DelayedReturn;
+  ExecutionThread() : DelayedReturn(nullptr) {
+    memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
+  }
   uint64_t ThreadID;
   // Make this type move-only.
-  ExecutionPath(ExecutionPath &&) = default;
-  ExecutionPath &operator=(ExecutionPath &&RHS) = default;
+  ExecutionThread(ExecutionThread &&) = default;
+  ExecutionThread &operator=(ExecutionThread &&RHS) = default;
 };
 
 // Interpreter - This class represents the entirety of the interpreter.
@@ -122,7 +124,7 @@ class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
   std::vector<Function *> AtExitHandlers;
   std::vector<MiriErrorTrace> StackTrace;
 
-  std::unordered_map<uint64_t, ExecutionPath> Threads;
+  std::unordered_map<uint64_t, ExecutionThread> Threads;
   uint64_t CurrentThreadID;
 
 public:
@@ -159,7 +161,7 @@ public:
   void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
 
   void createThreadContext(uint64_t ThreadID) {
-    Threads[ThreadID] = ExecutionPath();
+    Threads[ThreadID] = ExecutionThread();
   }
 
   uint64_t switchThread(uint64_t ThreadID) {
@@ -168,8 +170,8 @@ public:
     return OldThreadID;
   }
 
-  ExecutionPath *getCurrentThread() {
-    ExecutionPath *CurrThread = getThread(CurrentThreadID);
+  ExecutionThread *getCurrentThread() {
+    ExecutionThread *CurrThread = getThread(CurrentThreadID);
     if (CurrThread == nullptr) {
       llvm_unreachable("Current thread not found");
     } else {
@@ -177,11 +179,7 @@ public:
     }
   }
 
-  void terminateThread(uint64_t ThreadID) {
-    Threads.erase(ThreadID);
-  }
-
-  ExecutionPath *getThread(uint64_t ThreadID) {
+  ExecutionThread *getThread(uint64_t ThreadID) {
     auto it = Threads.find(ThreadID);
     if (it == Threads.end())
       return nullptr;
@@ -198,6 +196,8 @@ public:
     return getCurrentThread()->ECStack;
   }
 
+  bool atStackBottom() { return getCurrentThread()->ECStack.size() == 1; }
+
   bool stackIsEmpty() { return getCurrentThread()->ECStack.empty(); }
 
   size_t stackSize() { return getCurrentThread()->ECStack.size(); }
@@ -208,11 +208,13 @@ public:
   // Place a call on the stack
 
   void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
-  void run();                   // Execute instructions until nothing left to do
+  void run(); // Execute instructions until nothing left to do
   GenericValue *createThread(uint64_t NextThreadID, Function *F,
-                                        ArrayRef<GenericValue> ArgValues);
-  bool stepThread(uint64_t ThreadID); // Execute a single instruction
-  bool hasThread(uint64_t ThreadID);
+                             ArrayRef<GenericValue> ArgValues) override;
+  bool stepThread(uint64_t ThreadID) override; // Execute a single instruction
+  bool hasThread(uint64_t ThreadID) override;
+  void terminateThread(uint64_t ThreadID) override;
+
   // Opcode Implementations
   void visitReturnInst(ReturnInst &I);
   void visitBranchInst(BranchInst &I);
@@ -268,14 +270,16 @@ public:
     llvm_unreachable("Instruction not interpretable yet!");
   }
 
-  GenericValue callExternalFunction(Function *F,
-                                    ArrayRef<GenericValue> ArgVals);
+  GenericValue *resolveReturnPlaceLocation(Type *RetTy);
 
-  GenericValue CallMiriFunctionByName(Function *F,
-                                      ArrayRef<GenericValue> ArgVals);
-  GenericValue CallMiriFunctionByPointer(FunctionType *FType,
-                                         GenericValue FuncPtr,
-                                         ArrayRef<GenericValue> ArgVals);
+  void callExternalFunction(Function *F, ArrayRef<GenericValue> ArgVals,
+                            GenericValue *ReturnPlace);
+
+  void CallMiriFunctionByName(Function *F, ArrayRef<GenericValue> ArgVals,
+                              GenericValue *ReturnPlace);
+  void CallMiriFunctionByPointer(FunctionType *FType, GenericValue FuncPtr,
+                                 ArrayRef<GenericValue> ArgVals,
+                                 GenericValue *ReturnPlace);
 
   void exitCalled(GenericValue GV);
 
@@ -326,6 +330,9 @@ private: // Helper functions
   GenericValue executeCastOperation(Instruction::CastOps opcode, Value *SrcVal,
                                     Type *Ty, ExecutionContext &SF);
   void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result);
+
+  void enterLowerStackFrame(Type *RetTy);
+
   void passReturnValueToLowerStackFrame(Type *RetTy, GenericValue Result);
 };
 

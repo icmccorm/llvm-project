@@ -494,7 +494,7 @@ void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
 LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
                                    uint64_t ThreadID) {
   auto *ExecEngine = unwrap(EE);
-  return ExecEngine->stepThread(ThreadID);
+  return (LLVMBool)(ExecEngine->stepThread(ThreadID));
 }
 
 LLVMGenericValueRef
@@ -523,6 +523,10 @@ void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
                                             uint64_t ThreadID) {
   auto *ExecEngine = unwrap(EE);
   ExecEngine->terminateThread(ThreadID);
+}
+
+void LLVMGenericValueCopy(LLVMGenericValueRef Src, LLVMGenericValueRef Dest) {
+  *unwrap(Dest) = *unwrap(Src);
 }
 
 /*===-- Operations on memory managers -------------------------------------===*/

@@ -87,15 +87,28 @@ GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
 
 bool Interpreter::stepThread(uint64_t ThreadID) {
   Interpreter::switchThread(ThreadID);
-
   // Interpret a single instruction & increment the "PC".
   ExecutionContext &SF = Interpreter::context(); // Current stack frame
-  Instruction &I = *SF.CurInst++;                // Increment before execute
+  if (SF.Caller) {
+    cout << "Resolving calling context prior to next step." << endl;
+    if (InvokeInst *II = dyn_cast<InvokeInst>(SF.Caller))
+      SwitchToNewBasicBlock(II->getNormalDest(), SF);
+    SF.Caller = nullptr; // We returned from the call...
+  }
+  Instruction &I = *SF.CurInst++; // Increment before execute
 
   LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
   visit(I); // Dispatch to one of the visit* methods...
 
   return Interpreter::stackIsEmpty();
+}
+
+void Interpreter::terminateThread(uint64_t ThreadID) {
+  Threads.erase(ThreadID);
+}
+
+bool Interpreter::hasThread(uint64_t ThreadID) {
+  return Threads.find(ThreadID) != Threads.end();
 }
 
 GenericValue Interpreter::runFunction(Function *F,
@@ -124,7 +137,7 @@ GenericValue Interpreter::runFunction(Function *F,
 
 void Interpreter::registerMiriErrorWithoutLocation() {
   ExecutionEngine::setMiriErrorFlag();
-  ExecutionPath *CurrentPath = Interpreter::getCurrentThread();
+  ExecutionThread *CurrentPath = Interpreter::getCurrentThread();
   for (ExecutionContext &CurrContext : CurrentPath->ECStack) {
     if (CurrContext.Caller) {
       DILocation *Loc = CurrContext.Caller->getDebugLoc();

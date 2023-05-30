@@ -205,7 +205,7 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
                       const DataLayout &TD, GenericValue &Result) {
   ffi_cif cif;
   FunctionType *FTy = F->getFunctionType();
-  if(ffiTypeFor(FTy->getReturnType()) == nullptr){
+  if (ffiTypeFor(FTy->getReturnType()) == nullptr) {
     return false;
   }
   const unsigned NumArgs = F->arg_size();
@@ -224,8 +224,8 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
        A != E; ++A) {
     const unsigned ArgNo = A->getArgNo();
     Type *ArgTy = FTy->getParamType(ArgNo);
-    ffi_type* ffi_type = ffiTypeFor(ArgTy);
-    if(ffi_type == nullptr){
+    ffi_type *ffi_type = ffiTypeFor(ArgTy);
+    if (ffi_type == nullptr) {
       return false;
     }
     args[ArgNo] = ffi_type;
@@ -241,7 +241,7 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
     const unsigned ArgNo = A->getArgNo();
     Type *ArgTy = FTy->getParamType(ArgNo);
     void *ffi_value = ffiValueFor(ArgTy, ArgVals[ArgNo], ArgDataPtr);
-    if(ffi_value == nullptr){
+    if (ffi_value == nullptr) {
       return false;
     }
     values[ArgNo] = ffi_value;
@@ -290,24 +290,25 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
 }
 #endif // USE_LIBFFI
 
-GenericValue Interpreter::CallMiriFunctionByPointer(
-    FunctionType *FType, GenericValue FuncPtr, ArrayRef<GenericValue> ArgVals) {
+void Interpreter::CallMiriFunctionByPointer(FunctionType *FType,
+                                            GenericValue FuncPtr,
+                                            ArrayRef<GenericValue> ArgVals,
+                                            GenericValue *ReturnPlace) {
   MiriPointer MiriFuncPtr = GVTOMiriPointer(FuncPtr);
   LLVMGenericValueArrayRef ArgsArrayRef = wrap(&ArgVals);
   LLVMTypeRef FTypeRef = wrap(FType);
-  LLVMGenericValueRef ReturnVal = Interpreter::MiriCallByPointer(
-      ExecutionEngine::MiriWrapper, MiriFuncPtr, ArgsArrayRef, FTypeRef);
-  if (!ReturnVal) {
+  LLVMGenericValueRef ReturnPlaceRef = wrap(ReturnPlace);
+  bool HadError =
+      Interpreter::MiriCallByPointer(ExecutionEngine::MiriWrapper, MiriFuncPtr,
+                                     ArgsArrayRef, FTypeRef, ReturnPlaceRef);
+  if (HadError) {
     Interpreter::registerMiriErrorWithoutLocation();
-    return GenericValue(0);
-  } else {
-    return *unwrap(ReturnVal);
   }
 }
 
-GenericValue
-Interpreter::CallMiriFunctionByName(Function *F,
-                                    ArrayRef<GenericValue> ArgVals) {
+void Interpreter::CallMiriFunctionByName(Function *F,
+                                         ArrayRef<GenericValue> ArgVals,
+                                         GenericValue *ReturnPlace) {
   StringRef Name = F->getName();
   const char *NamePtr = Name.data();
   uint64_t NameLength = Name.size();
@@ -315,20 +316,18 @@ Interpreter::CallMiriFunctionByName(Function *F,
   FunctionType *FType = F->getFunctionType();
   LLVMTypeRef FTypeRef = wrap(FType);
   LLVMGenericValueArrayRef ArgsArrayRef = wrap(&ArgVals);
-
-  LLVMGenericValueRef ReturnVal =
-      Interpreter::MiriCallByName(ExecutionEngine::MiriWrapper, ArgsArrayRef,
-                                  NamePtr, NameLength, FTypeRef);
-  if (!ReturnVal) {
+  LLVMGenericValueRef ReturnPlaceRef = wrap(ReturnPlace);
+  bool HadError = Interpreter::MiriCallByName(ExecutionEngine::MiriWrapper,
+                                              ArgsArrayRef, NamePtr, NameLength,
+                                              FTypeRef, ReturnPlaceRef);
+  if (HadError) {
     Interpreter::registerMiriErrorWithoutLocation();
-    return GenericValue(0);
-  } else {
-    return *unwrap(ReturnVal);
   }
 }
 
-GenericValue Interpreter::callExternalFunction(Function *F,
-                                               ArrayRef<GenericValue> ArgVals) {
+void Interpreter::callExternalFunction(Function *F,
+                                       ArrayRef<GenericValue> ArgVals,
+                                       GenericValue *ReturnPlace) {
   TheInterpreter = this;
   std::unique_lock<sys::Mutex> Guard(*FunctionsLock);
 
@@ -338,9 +337,12 @@ GenericValue Interpreter::callExternalFunction(Function *F,
   if (ExFunc Fn =
           (FI == ExportedFunctions->end()) ? lookupFunction(F) : FI->second) {
     Guard.unlock();
-    return Fn(F->getFunctionType(), ArgVals);
+    GenericValue Result = Fn(F->getFunctionType(), ArgVals);
+    if (ReturnPlace) {
+      *ReturnPlace = Result;
+    }
+    return;
   }
-
 #ifdef USE_LIBFFI
   std::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
   RawFunc RawFn;
@@ -358,21 +360,23 @@ GenericValue Interpreter::callExternalFunction(Function *F,
   Guard.unlock();
 
   GenericValue Result;
-  if (RawFn != 0 && ffiInvoke(RawFn, F, ArgVals, getDataLayout(), Result))
-    return Result;
+  if (RawFn != 0 && ffiInvoke(RawFn, F, ArgVals, getDataLayout(), Result)) {
+    if (ReturnPlace) {
+      *ReturnPlace = Result;
+    }
+    return;
+  }  
 #endif // USE_LIBFFI
 
   if (F->getName() == "__main") {
     errs() << "Tried to execute an unknown external function: " << *F->getType()
            << " __main\n";
   } else {
-    return CallMiriFunctionByName(F, ArgVals);
+    CallMiriFunctionByName(F, ArgVals, ReturnPlace);
   }
-
 #ifndef USE_LIBFFI
   errs() << "Recompiling LLVM with --enable-libffi might help.\n";
 #endif
-  return GenericValue();
 }
 
 //===----------------------------------------------------------------------===//

@@ -246,6 +246,9 @@ LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,
 void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
                                             uint64_t ThreadID);
 
+void LLVMGenericValueCopy(LLVMGenericValueRef Src, LLVMGenericValueRef Dest);
+
+
 /*===-- Operations on memory managers -------------------------------------===*/
 
 typedef uint8_t *(*LLVMMemoryManagerAllocateCodeSectionCallback)(

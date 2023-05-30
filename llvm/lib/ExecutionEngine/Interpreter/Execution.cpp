@@ -1024,6 +1024,23 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
   passReturnValueToLowerStackFrame(RetTy, Result);
 }
 
+GenericValue *Interpreter::resolveReturnPlaceLocation(Type *RetTy) {
+  if (Interpreter::atStackBottom()) {
+    cout << "returning ref to exit value" << endl;
+    return Interpreter::getCurrentExitValue();
+  } else {
+    // If we have a previous stack frame, and we have a previous call,
+    // fill in the return value...
+    ExecutionContext &CallingSF = Interpreter::context();
+    if (CallingSF.Caller) {
+      cout << "Returning ref to caller's return value" << endl;
+      return &CallingSF.Values[CallingSF.Caller];
+    } else {
+      llvm_unreachable(
+          "Cannot resolve the return place for the calling context.");
+    }
+  }
+}
 void Interpreter::passReturnValueToLowerStackFrame(Type *RetTy,
                                                    GenericValue Result) {
   if (Interpreter::stackIsEmpty()) {   // Finished main.  Put result into exit
@@ -1106,7 +1123,6 @@ void Interpreter::visitIndirectBrInst(IndirectBrInst &I) {
   void *Dest = GVTOP(getOperandValue(I.getAddress(), SF));
   SwitchToNewBasicBlock((BasicBlock *)Dest, SF);
 }
-
 // SwitchToNewBasicBlock - This method is used to jump to a new basic block.
 // This function handles the actual updating of block and instruction iterators
 // as well as execution of all of the PHI nodes in the destination block.
@@ -1117,6 +1133,7 @@ void Interpreter::visitIndirectBrInst(IndirectBrInst &I) {
 // their inputs.  If the input PHI node is updated before it is read, incorrect
 // results can happen.  Thus we use a two phase approach.
 //
+
 void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest,
                                         ExecutionContext &SF) {
   BasicBlock *PrevBB = SF.CurBB;  // Remember where we came from...
@@ -1341,7 +1358,6 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 
 void Interpreter::visitCallBase(CallBase &I) {
   ExecutionContext &SF = Interpreter::context();
-
   SF.Caller = &I;
   std::vector<GenericValue> ArgVals;
   const unsigned NumArgs = SF.Caller->arg_size();
@@ -1352,10 +1368,11 @@ void Interpreter::visitCallBase(CallBase &I) {
   // and treat it as a function pointer.
   GenericValue SRC = getOperandValue(SF.Caller->getCalledOperand(), SF);
   if (SRC.Provenance.alloc_id != 0) {
-    GenericValue Result = Interpreter::CallMiriFunctionByPointer(
-        I.getFunctionType(), SRC, ArgVals);
-    passReturnValueToLowerStackFrame(I.getFunctionType()->getReturnType(),
-                                     Result);
+    GenericValue *ReturnPointer = Interpreter::resolveReturnPlaceLocation(
+        I.getFunctionType()->getReturnType());
+    Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
+                                           ReturnPointer);
+
   } else {
     callFunction((Function *)GVTOP(SRC), ArgVals);
   }
@@ -2360,7 +2377,6 @@ GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {
 // callFunction - Execute the specified function...
 //
 void Interpreter::callFunction(Function *F, ArrayRef<GenericValue> ArgVals) {
-  assert((!Interpreter::pathsAreEmpty() && "No path to execute!"));
   assert((Interpreter::stackIsEmpty() || !Interpreter::context().Caller ||
           Interpreter::context().Caller->arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");
@@ -2373,9 +2389,12 @@ void Interpreter::callFunction(Function *F, ArrayRef<GenericValue> ArgVals) {
 
   // Special handling for external functions.
   if (F->isDeclaration()) {
-    GenericValue Result = callExternalFunction(F, ArgVals);
+    GenericValue *ReturnPointer = Interpreter::resolveReturnPlaceLocation(
+        F->getFunctionType()->getReturnType());
+    callExternalFunction(F, ArgVals, ReturnPointer);
+    cout << "AllocID of ReturnPointer:" << ReturnPointer->Provenance.alloc_id << endl;
     // Simulate a 'ret' instruction of the appropriate type.
-    popStackAndReturnValueToCaller(F->getReturnType(), Result);
+    Interpreter::popContext();
     return;
   }
 

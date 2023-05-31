@@ -200,8 +200,6 @@ static void executeFRemInst(GenericValue &Dest, GenericValue Src1,
 static GenericValue executeICMP_EQ(GenericValue Src1, GenericValue Src2,
                                    Type *Ty) {
   GenericValue Dest;
-  // print the contents of PointerVal for each Src1 and Src2, as well as the
-  // result of == for both to cout
   switch (Ty->getTypeID()) {
     IMPLEMENT_INTEGER_ICMP(eq, Ty);
     IMPLEMENT_VECTOR_INTEGER_ICMP(eq, Ty);
@@ -1024,21 +1022,20 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
   passReturnValueToLowerStackFrame(RetTy, Result);
 }
 
-GenericValue *Interpreter::resolveReturnPlaceLocation(Type *RetTy) {
-  if (Interpreter::atStackBottom()) {
-    cout << "returning ref to exit value" << endl;
-    return Interpreter::getCurrentExitValue();
-  } else {
+GenericValue *
+Interpreter::resolveReturnPlaceLocation(ExecutionContext *CallingSF,
+                                        Type *RetTy) {
+  if (CallingSF) {
     // If we have a previous stack frame, and we have a previous call,
     // fill in the return value...
-    ExecutionContext &CallingSF = Interpreter::context();
-    if (CallingSF.Caller) {
-      cout << "Returning ref to caller's return value" << endl;
-      return &CallingSF.Values[CallingSF.Caller];
+    if (CallingSF->Caller) {
+      return &CallingSF->Values[CallingSF->Caller];
     } else {
       llvm_unreachable(
           "Cannot resolve the return place for the calling context.");
     }
+  } else {
+    return Interpreter::getThreadExitValue();
   }
 }
 void Interpreter::passReturnValueToLowerStackFrame(Type *RetTy,
@@ -1049,7 +1046,7 @@ void Interpreter::passReturnValueToLowerStackFrame(Type *RetTy,
       Interpreter::setExitValue(
           Result); // Capture the exit value of the program
     } else {
-      GenericValue *Exit = Interpreter::getCurrentExitValue();
+      GenericValue *Exit = Interpreter::getThreadExitValue();
       memset(Exit->Untyped, 0, sizeof(Exit->Untyped));
     }
   } else {
@@ -1142,7 +1139,6 @@ void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest,
 
   if (!isa<PHINode>(SF.CurInst))
     return; // Nothing fancy to do
-
   // Loop over all of the PHI nodes in the current block, reading their inputs.
   std::vector<GenericValue> ResultValues;
 
@@ -1159,8 +1155,9 @@ void Interpreter::SwitchToNewBasicBlock(BasicBlock *Dest,
   // Now loop over all of the PHI nodes setting their values...
   SF.CurInst = SF.CurBB->begin();
   for (unsigned i = 0; isa<PHINode>(SF.CurInst); ++SF.CurInst, ++i) {
+    GenericValue ResultValue = ResultValues[i];
     PHINode *PN = cast<PHINode>(SF.CurInst);
-    SetValue(PN, ResultValues[i], SF);
+    SetValue(PN, ResultValue, SF);
   }
 }
 
@@ -1369,10 +1366,9 @@ void Interpreter::visitCallBase(CallBase &I) {
   GenericValue SRC = getOperandValue(SF.Caller->getCalledOperand(), SF);
   if (SRC.Provenance.alloc_id != 0) {
     GenericValue *ReturnPointer = Interpreter::resolveReturnPlaceLocation(
-        I.getFunctionType()->getReturnType());
+        &Interpreter::context(), I.getFunctionType()->getReturnType());
     Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
                                            ReturnPointer);
-
   } else {
     callFunction((Function *)GVTOP(SRC), ArgVals);
   }
@@ -2390,9 +2386,9 @@ void Interpreter::callFunction(Function *F, ArrayRef<GenericValue> ArgVals) {
   // Special handling for external functions.
   if (F->isDeclaration()) {
     GenericValue *ReturnPointer = Interpreter::resolveReturnPlaceLocation(
+        Interpreter::callingContext(),
         F->getFunctionType()->getReturnType());
     callExternalFunction(F, ArgVals, ReturnPointer);
-    cout << "AllocID of ReturnPointer:" << ReturnPointer->Provenance.alloc_id << endl;
     // Simulate a 'ret' instruction of the appropriate type.
     Interpreter::popContext();
     return;

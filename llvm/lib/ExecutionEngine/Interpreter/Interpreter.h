@@ -82,7 +82,6 @@ struct ExecutionContext {
   // Make this type move-only.
   ExecutionContext(ExecutionContext &&) = default;
   ExecutionContext &operator=(ExecutionContext &&RHS) = default;
-
   Function *CurFunction;        // The currently executing function
   BasicBlock *CurBB;            // The currently executing BB
   BasicBlock::iterator CurInst; // The next instruction to execute
@@ -154,9 +153,18 @@ public:
     return nullptr;
   }
 
+  ExecutionContext *callingContext() {
+    if (getCurrentThread()->ECStack.size() < 2) {
+      return nullptr;
+    } else {
+      return &getCurrentThread()->ECStack[getCurrentThread()->ECStack.size() -
+                                           2];
+    }
+  }
+  
   ExecutionContext &context() { return getCurrentThread()->ECStack.back(); }
 
-  GenericValue *getCurrentExitValue() { return &getCurrentThread()->ExitValue; }
+  GenericValue *getThreadExitValue() { return &getCurrentThread()->ExitValue; }
 
   void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
 
@@ -270,7 +278,7 @@ public:
     llvm_unreachable("Instruction not interpretable yet!");
   }
 
-  GenericValue *resolveReturnPlaceLocation(Type *RetTy);
+  GenericValue *resolveReturnPlaceLocation(ExecutionContext *CallingContext, Type *RetTy);
 
   void callExternalFunction(Function *F, ArrayRef<GenericValue> ArgVals,
                             GenericValue *ReturnPlace);

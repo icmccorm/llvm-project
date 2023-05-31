@@ -90,7 +90,6 @@ bool Interpreter::stepThread(uint64_t ThreadID) {
   // Interpret a single instruction & increment the "PC".
   ExecutionContext &SF = Interpreter::context(); // Current stack frame
   if (SF.Caller) {
-    cout << "Resolving calling context prior to next step." << endl;
     if (InvokeInst *II = dyn_cast<InvokeInst>(SF.Caller))
       SwitchToNewBasicBlock(II->getNormalDest(), SF);
     SF.Caller = nullptr; // We returned from the call...
@@ -99,7 +98,7 @@ bool Interpreter::stepThread(uint64_t ThreadID) {
 
   LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
   visit(I); // Dispatch to one of the visit* methods...
-
+  
   return Interpreter::stackIsEmpty();
 }
 
@@ -132,7 +131,7 @@ GenericValue Interpreter::runFunction(Function *F,
   // Start executing the function.
   run();
 
-  return *Interpreter::getCurrentExitValue();
+  return *Interpreter::getThreadExitValue();
 }
 
 void Interpreter::registerMiriErrorWithoutLocation() {

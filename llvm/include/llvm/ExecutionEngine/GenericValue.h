@@ -13,6 +13,7 @@
 #ifndef LLVM_EXECUTIONENGINE_GENERICVALUE_H
 #define LLVM_EXECUTIONENGINE_GENERICVALUE_H
 
+#include "llvm-c/Miri.h"
 #include "llvm/ADT/APInt.h"
 #include <vector>
 
@@ -33,7 +34,8 @@ struct GenericValue {
     unsigned char Untyped[8];
   };
   APInt IntVal; // also used for long doubles.
-  // For aggregate data types.
+  MiriProvenance Provenance = {0, 0};
+  MiriProvenance ParentProvenance = {0, 0};
   std::vector<GenericValue> AggregateVal;
 
   // to make code faster, set GenericValue to zero could be omitted, but it is
@@ -42,13 +44,24 @@ struct GenericValue {
   GenericValue() : IntVal(1, 0) {
     UIntPairVal.first = 0;
     UIntPairVal.second = 0;
+    Provenance = NULL_PROVENANCE;
   }
-  explicit GenericValue(void *V) : PointerVal(V), IntVal(1, 0) {}
+  explicit GenericValue(MiriPointer Meta)
+      : PointerVal((void *)(intptr_t)Meta.addr), IntVal(1, 0),
+        Provenance(Meta.prov) {}
+  explicit GenericValue(void *V)
+      : PointerVal(V), IntVal(1, 0), Provenance(NULL_PROVENANCE),
+        ParentProvenance(NULL_PROVENANCE) {}
 };
-
+inline GenericValue MiriPointerTOGV(MiriPointer P) { return GenericValue(P); }
 inline GenericValue PTOGV(void *P) { return GenericValue(P); }
 inline void *GVTOP(const GenericValue &GV) { return GV.PointerVal; }
-
+inline MiriPointer GVTOMiriPointer(GenericValue &GV) {
+  return MiriPointer{
+      (uint64_t)(uintptr_t)GV.PointerVal,
+      GV.Provenance,
+  };
+}
 } // end namespace llvm
 
 #endif // LLVM_EXECUTIONENGINE_GENERICVALUE_H

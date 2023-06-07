@@ -343,6 +343,7 @@ void Interpreter::callExternalFunction(Function *F,
     }
     return;
   }
+
 #ifdef USE_LIBFFI
   std::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
   RawFunc RawFn;

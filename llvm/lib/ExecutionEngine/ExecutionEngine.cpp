@@ -1461,7 +1461,8 @@ void ExecutionEngine::emitGlobals() {
                 std::string(GV.getName())))
           addGlobalMapping(&GV, SymAddr);
         else {
-          addGlobalMapping(&GV, nullptr);
+          report_fatal_error("Could not resolve external global address: "
+                            +GV.getName());
         }
       }
     }

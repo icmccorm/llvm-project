@@ -1022,22 +1022,6 @@ void Interpreter::popStackAndReturnValueToCaller(Type *RetTy,
   passReturnValueToLowerStackFrame(RetTy, Result);
 }
 
-GenericValue *
-Interpreter::resolveReturnPlaceLocation(ExecutionContext *CallingSF,
-                                        Type *RetTy) {
-  if (CallingSF) {
-    // If we have a previous stack frame, and we have a previous call,
-    // fill in the return value...
-    if (CallingSF->Caller) {
-      return &CallingSF->Values[CallingSF->Caller];
-    } else {
-      llvm_unreachable(
-          "Cannot resolve the return place for the calling context.");
-    }
-  } else {
-    return Interpreter::getThreadExitValue();
-  }
-}
 void Interpreter::passReturnValueToLowerStackFrame(Type *RetTy,
                                                    GenericValue Result) {
   if (Interpreter::stackIsEmpty()) {   // Finished main.  Put result into exit
@@ -1365,13 +1349,12 @@ void Interpreter::visitCallBase(CallBase &I) {
   // and treat it as a function pointer.
   GenericValue SRC = getOperandValue(SF.Caller->getCalledOperand(), SF);
   if (SRC.Provenance.alloc_id != 0) {
-    GenericValue *ReturnPointer = Interpreter::resolveReturnPlaceLocation(
-        &Interpreter::context(), I.getFunctionType()->getReturnType());
+    GenericValue *ReturnPointer = Interpreter::getReturnPlace();
     Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
                                            ReturnPointer);
-  } else {
-    callFunction((Function *)GVTOP(SRC), ArgVals);
+    return;
   }
+  callFunction(SRC, ArgVals);
 }
 
 // auxiliary function for shift operations
@@ -2372,22 +2355,22 @@ GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {
 //===----------------------------------------------------------------------===//
 // callFunction - Execute the specified function...
 //
-void Interpreter::callFunction(Function *F, ArrayRef<GenericValue> ArgVals) {
+void Interpreter::callFunction(GenericValue FuncPointer,
+                               ArrayRef<GenericValue> ArgVals) {
   assert((Interpreter::stackIsEmpty() || !Interpreter::context().Caller ||
           Interpreter::context().Caller->arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");
+
+  Function *F = cast<Function>((Function *)FuncPointer.PointerVal);
   // Make a new stack frame... and fill it in.
   Interpreter::currentStack().emplace_back(
       Interpreter::ExecutionEngine::MiriWrapper,
       Interpreter::ExecutionEngine::MiriFree);
   ExecutionContext &StackFrame = Interpreter::context();
   StackFrame.CurFunction = F;
-
   // Special handling for external functions.
   if (F->isDeclaration()) {
-    GenericValue *ReturnPointer = Interpreter::resolveReturnPlaceLocation(
-        Interpreter::callingContext(),
-        F->getFunctionType()->getReturnType());
+    GenericValue *ReturnPointer = Interpreter::getReturnPlace();
     callExternalFunction(F, ArgVals, ReturnPointer);
     // Simulate a 'ret' instruction of the appropriate type.
     Interpreter::popContext();

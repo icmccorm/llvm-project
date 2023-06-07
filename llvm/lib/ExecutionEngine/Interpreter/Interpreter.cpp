@@ -63,7 +63,7 @@ Interpreter::~Interpreter() { delete IL; }
 
 void Interpreter::runAtExitHandlers() {
   while (!AtExitHandlers.empty()) {
-    callFunction(AtExitHandlers.back(), ArrayRef<GenericValue>());
+    callFunction(PTOGV(AtExitHandlers.back()), ArrayRef<GenericValue>());
     AtExitHandlers.pop_back();
     run();
   }
@@ -79,7 +79,7 @@ GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
   ArrayRef<GenericValue> ActualArgs =
       ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
   // Set up the function call.
-  callFunction(F, ActualArgs);
+  callFunction(PTOGV(F), ActualArgs);
   GenericValue *ReturnValRef = &Interpreter::getCurrentThread()->ExitValue;
   Interpreter::switchThread(PrevThread);
   return ReturnValRef;
@@ -88,17 +88,21 @@ GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
 bool Interpreter::stepThread(uint64_t ThreadID) {
   Interpreter::switchThread(ThreadID);
   // Interpret a single instruction & increment the "PC".
-  ExecutionContext &SF = Interpreter::context(); // Current stack frame
-  if (SF.Caller) {
-    if (InvokeInst *II = dyn_cast<InvokeInst>(SF.Caller))
-      SwitchToNewBasicBlock(II->getNormalDest(), SF);
-    SF.Caller = nullptr; // We returned from the call...
+  ExecutionContext &CallingSF = Interpreter::context();
+
+  if (CallingSF.Caller) {
+    GenericValue Result = getPendingReturnValue();
+    if (!CallingSF.Caller->getType()->isVoidTy())
+      CallingSF.Values[(Value *)CallingSF.Caller] = Result;
+    if (InvokeInst *II = dyn_cast<InvokeInst>(CallingSF.Caller))
+      SwitchToNewBasicBlock(II->getNormalDest(), CallingSF);
+    CallingSF.Caller = nullptr; // We returned from the call...
   }
-  Instruction &I = *SF.CurInst++; // Increment before execute
+  Instruction &I = *CallingSF.CurInst++; // Increment before execute
 
   LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
   visit(I); // Dispatch to one of the visit* methods...
-  
+
   return Interpreter::stackIsEmpty();
 }
 
@@ -126,7 +130,7 @@ GenericValue Interpreter::runFunction(Function *F,
       ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
 
   // Set up the function call.
-  callFunction(F, ActualArgs);
+  callFunction(PTOGV(F), ActualArgs);
 
   // Start executing the function.
   run();

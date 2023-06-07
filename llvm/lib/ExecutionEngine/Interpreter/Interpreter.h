@@ -86,14 +86,15 @@ struct ExecutionContext {
   BasicBlock *CurBB;            // The currently executing BB
   BasicBlock::iterator CurInst; // The next instruction to execute
   CallBase *Caller;             // Holds the call that called subframes.
-                                // NULL if main func or debugger invoked fn
+  GenericValue AwaitingReturn; // If non-null, the return value of the call into
+                               // Rust NULL if main func or debugger invoked fn
   std::map<Value *, GenericValue> Values; // LLVM values used in this invocation
   std::vector<GenericValue> VarArgs;      // Values passed through an ellipsis
   AllocaHolder Allocas;                   // Track memory allocated by alloca
   MiriAllocaHolder MiriAllocas;
   ExecutionContext(void *Wrapper, MiriFreeHook MiriFree)
-      : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr),
-        MiriAllocas(Wrapper, MiriFree) {}
+      : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr), Caller(nullptr),
+        AwaitingReturn(GenericValue(0)), MiriAllocas(Wrapper, MiriFree) {}
 };
 
 class ExecutionThread {
@@ -157,11 +158,11 @@ public:
     if (getCurrentThread()->ECStack.size() < 2) {
       return nullptr;
     } else {
-      return &getCurrentThread()->ECStack[getCurrentThread()->ECStack.size() -
-                                           2];
+      return &getCurrentThread()
+                  ->ECStack[getCurrentThread()->ECStack.size() - 2];
     }
   }
-  
+
   ExecutionContext &context() { return getCurrentThread()->ECStack.back(); }
 
   GenericValue *getThreadExitValue() { return &getCurrentThread()->ExitValue; }
@@ -185,6 +186,20 @@ public:
     } else {
       return CurrThread;
     }
+  }
+
+  GenericValue *getReturnPlace() {
+    if (getCurrentThread()->ECStack.size() < 2) {
+      return getThreadExitValue();
+    } else {
+      return &getCurrentThread()
+                  ->ECStack[getCurrentThread()->ECStack.size() - 2]
+                  .AwaitingReturn;
+    }
+  }
+
+  GenericValue getPendingReturnValue() {
+    return getCurrentThread()->ECStack.back().AwaitingReturn;
   }
 
   ExecutionThread *getThread(uint64_t ThreadID) {
@@ -215,7 +230,7 @@ public:
   // Methods used to execute code:
   // Place a call on the stack
 
-  void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
+  void callFunction(GenericValue F, ArrayRef<GenericValue> ArgVals);
   void run(); // Execute instructions until nothing left to do
   GenericValue *createThread(uint64_t NextThreadID, Function *F,
                              ArrayRef<GenericValue> ArgValues) override;
@@ -278,7 +293,8 @@ public:
     llvm_unreachable("Instruction not interpretable yet!");
   }
 
-  GenericValue *resolveReturnPlaceLocation(ExecutionContext *CallingContext, Type *RetTy);
+  GenericValue *resolveReturnPlaceLocation(ExecutionContext *CallingContext,
+                                           Type *RetTy);
 
   void callExternalFunction(Function *F, ArrayRef<GenericValue> ArgVals,
                             GenericValue *ReturnPlace);

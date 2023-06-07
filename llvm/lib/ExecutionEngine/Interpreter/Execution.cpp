@@ -13,6 +13,7 @@
 #include "Interpreter.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -24,7 +25,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -1321,8 +1321,21 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 
   switch (I.getIntrinsicID()) {
   case Intrinsic::objectsize:
-  case Intrinsic::is_constant:
-    break;
+    SetValue(&I,
+             getOperandValue(
+                 lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
+             SF);
+    ++SF.CurInst;
+    return;
+  case Intrinsic::is_constant: {
+    Value *Flag = ConstantInt::getFalse(I.getType());
+    if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
+      if (C->isManifestConstant())
+        Flag = ConstantInt::getTrue(I.getType());
+    SetValue(&I, getOperandValue(Flag, SF), SF);
+    ++SF.CurInst;
+  }
+    return;
   default: {
     IL->LowerIntrinsicCall(&I);
   } break;
@@ -2360,7 +2373,6 @@ void Interpreter::callFunction(GenericValue FuncPointer,
   assert((Interpreter::stackIsEmpty() || !Interpreter::context().Caller ||
           Interpreter::context().Caller->arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");
-
   Function *F = cast<Function>((Function *)FuncPointer.PointerVal);
   // Make a new stack frame... and fill it in.
   Interpreter::currentStack().emplace_back(
@@ -2368,6 +2380,7 @@ void Interpreter::callFunction(GenericValue FuncPointer,
       Interpreter::ExecutionEngine::MiriFree);
   ExecutionContext &StackFrame = Interpreter::context();
   StackFrame.CurFunction = F;
+
   // Special handling for external functions.
   if (F->isDeclaration()) {
     GenericValue *ReturnPointer = Interpreter::getReturnPlace();

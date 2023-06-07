@@ -1458,11 +1458,10 @@ void ExecutionEngine::emitGlobals() {
         // External variable reference. Try to use the dynamic loader to
         // get a pointer to it.
         if (void *SymAddr = sys::DynamicLibrary::SearchForAddressOfSymbol(
-                std::string(GV.getName())))
-          addGlobalMapping(&GV, SymAddr);
-        else {
-          report_fatal_error("Could not resolve external global address: "
-                            +GV.getName());
+                std::string(GV.getName()))) {
+          llvm_unreachable("Miri + LLI doesn't support external variables from dynamically linked libraries.");
+        } else {
+          addGlobalMapping(&GV, getMemoryForGV(&GV));
         }
       }
     }

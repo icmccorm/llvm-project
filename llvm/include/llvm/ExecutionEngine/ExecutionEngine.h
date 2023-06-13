@@ -174,7 +174,7 @@ protected:
   MiriMemcpy MMemcpy = nullptr;
   MiriIntToPtr MIntToPtr = nullptr;
   MiriPtrToInt MPtrToInt = nullptr;
-
+  MiriRegisterGlobalHook MiriRegisterGlobal = nullptr;
 public:
   /// lock - This lock protects the ExecutionEngine and MCJIT classes. It must
   /// be held while changing the internal state of any of those classes.
@@ -578,10 +578,14 @@ public:
     MPtrToInt = IncomingPtrToInt;
   }
 
+  void setMiriRegisterGlobalHook(MiriRegisterGlobalHook GlobalHook) {
+    MiriRegisterGlobal = GlobalHook;
+  }
+
   bool miriIsInitialized() {
     return MiriWrapper && MiriCallByName && MiriCallByPointer &&
            MiriStackTraceRecorder && MiriLoad && MiriStore && MiriMalloc &&
-           MiriFree && MMemset && MMemcpy && MIntToPtr && MPtrToInt;
+           MiriFree && MMemset && MMemcpy && MIntToPtr && MPtrToInt && MiriRegisterGlobal;
   }
 
   virtual GenericValue *createThread(uint64_t NextThreadID, Function *F,

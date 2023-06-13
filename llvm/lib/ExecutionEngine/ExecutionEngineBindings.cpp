@@ -385,6 +385,11 @@ MiriPointer LLVMGetMiriPointerToGlobalByName(LLVMExecutionEngineRef EE,
   return unwrap(EE)->getMiriPointerToGlobalByName(Name);
 }
 
+void LLVMSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE, MiriRegisterGlobalHook GlobalHook) {
+  assert(GlobalHook && "GlobalHook must be non-null");
+  unwrap(EE)->setMiriRegisterGlobalHook(GlobalHook);
+}
+
 uint64_t LLVMGetGlobalValueAddress(LLVMExecutionEngineRef EE,
                                    const char *Name) {
   return unwrap(EE)->getGlobalValueAddress(Name);

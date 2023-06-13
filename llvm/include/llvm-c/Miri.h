@@ -61,5 +61,8 @@ typedef bool (*MiriCallByNameHook)(void *, LLVMGenericValueArrayRef,
 typedef bool (*MiriCallByPointerHook)(void *, MiriPointer,
                                       LLVMGenericValueArrayRef, LLVMTypeRef,
                                       LLVMGenericValueRef);
+typedef bool (*MiriRegisterGlobalHook)(void *, const char *, uint64_t,
+                                       MiriPointer);
+
 LLVM_C_EXTERN_C_END
 #endif // LLVM_C_MIRI_H

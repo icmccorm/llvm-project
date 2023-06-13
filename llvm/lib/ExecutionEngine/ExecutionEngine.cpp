@@ -129,6 +129,9 @@ char *ExecutionEngine::getMemoryForGV(const GlobalVariable *GV) {
     MiriPointer RawMemory =
         ExecutionEngine::MiriMalloc(MiriWrapper, GVSize, Alignment);
     ExecutionEngine::addMiriProvenanceEntry(RawMemory);
+    ExecutionEngine::MiriRegisterGlobal(ExecutionEngine::MiriWrapper,
+                                        GV->getName().str().c_str(),
+                                        GV->getName().size(), RawMemory);
     return (char *)RawMemory.addr;
   } else {
     report_fatal_error("Miri is not initialized");
@@ -220,10 +223,13 @@ std::string ExecutionEngine::getMangledNameFromString(const std::string &Name) {
   return std::string(FullName.str());
 }
 
-MiriPointer ExecutionEngine::getMiriPointerToGlobalByName(const std::string &Name) {
+MiriPointer
+ExecutionEngine::getMiriPointerToGlobalByName(const std::string &Name) {
   std::lock_guard<sys::Mutex> locked(lock);
-  uint64_t Address = ExecutionEngine::getAddressToGlobalIfAvailable(getMangledNameFromString(Name));
-  MiriProvenance Prov = ExecutionEngine::getProvenanceOfGlobalIfAvailable((void *)Address);
+  uint64_t Address = ExecutionEngine::getAddressToGlobalIfAvailable(
+      getMangledNameFromString(Name));
+  MiriProvenance Prov =
+      ExecutionEngine::getProvenanceOfGlobalIfAvailable((void *)Address);
   return {(uint64_t)Address, Prov};
 }
 
@@ -1459,7 +1465,8 @@ void ExecutionEngine::emitGlobals() {
         // get a pointer to it.
         if (void *SymAddr = sys::DynamicLibrary::SearchForAddressOfSymbol(
                 std::string(GV.getName()))) {
-          llvm_unreachable("Miri + LLI doesn't support external variables from dynamically linked libraries.");
+          llvm_unreachable("Miri + LLI doesn't support external variables from "
+                           "dynamically linked libraries.");
         } else {
           addGlobalMapping(&GV, getMemoryForGV(&GV));
         }

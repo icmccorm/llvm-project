@@ -132,7 +132,7 @@ static ExFunc lookupFunction(const Function *F) {
     ExportedFunctions->insert(std::make_pair(F, FnPtr)); // Cache for later
   return FnPtr;
 }
-/*
+
 #ifdef USE_LIBFFI
 
 static ffi_type *ffiTypeFor(Type *Ty) {
@@ -289,7 +289,7 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
   return false;
 }
 #endif // USE_LIBFFI
-*/
+
 void Interpreter::CallMiriFunctionByPointer(FunctionType *FType,
                                             GenericValue FuncPtr,
                                             ArrayRef<GenericValue> ArgVals,
@@ -343,7 +343,7 @@ void Interpreter::callExternalFunction(Function *F,
     }
     return;
   }
-/*
+
 #ifdef USE_LIBFFI
   std::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
   RawFunc RawFn;
@@ -368,7 +368,7 @@ void Interpreter::callExternalFunction(Function *F,
     return;
   }  
 #endif // USE_LIBFFI
-*/
+
   if (F->getName() == "__main") {
     errs() << "Tried to execute an unknown external function: " << *F->getType()
            << " __main\n";

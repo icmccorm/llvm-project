@@ -1362,12 +1362,13 @@ void Interpreter::visitCallBase(CallBase &I) {
   // and treat it as a function pointer.
   GenericValue SRC = getOperandValue(SF.Caller->getCalledOperand(), SF);
   if (SRC.Provenance.alloc_id != 0) {
-    GenericValue *ReturnPointer = Interpreter::getReturnPlace();
+    GenericValue *ReturnPointer = &SF.AwaitingReturn;
     Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
                                            ReturnPointer);
     return;
+  }else{
+    callFunction(SRC, ArgVals);
   }
-  callFunction(SRC, ArgVals);
 }
 
 // auxiliary function for shift operations

@@ -127,7 +127,7 @@ char *ExecutionEngine::getMemoryForGV(const GlobalVariable *GV) {
     uint64_t GVSize = (size_t)TD.getTypeAllocSize(ElTy);
     uint64_t Alignment = TD.getABITypeAlign(ElTy).value();
     MiriPointer RawMemory =
-        ExecutionEngine::MiriMalloc(MiriWrapper, GVSize, Alignment);
+        ExecutionEngine::MiriMalloc(MiriWrapper, GVSize, Alignment, true);
     ExecutionEngine::addMiriProvenanceEntry(RawMemory);
     ExecutionEngine::MiriRegisterGlobal(ExecutionEngine::MiriWrapper,
                                         GV->getName().str().c_str(),

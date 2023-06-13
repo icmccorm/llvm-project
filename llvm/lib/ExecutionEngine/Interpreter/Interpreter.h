@@ -197,6 +197,7 @@ public:
                   .AwaitingReturn;
     }
   }
+  
 
   GenericValue getPendingReturnValue() {
     return getCurrentThread()->ECStack.back().AwaitingReturn;

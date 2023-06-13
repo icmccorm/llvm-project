@@ -1166,7 +1166,7 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
 
   if (Interpreter::ExecutionEngine::miriIsInitialized()) {
     MiriPointer MiriPointerVal = Interpreter::ExecutionEngine::MiriMalloc(
-        Interpreter::ExecutionEngine::MiriWrapper, MemToAlloc, Alignment);
+        Interpreter::ExecutionEngine::MiriWrapper, MemToAlloc, Alignment, false);
     LLVM_DEBUG(dbgs() << "Miri Allocated Type: " << *Ty << " (" << TypeSize
                       << " bytes) x " << NumElements
                       << " (Total: " << MemToAlloc << ") at "

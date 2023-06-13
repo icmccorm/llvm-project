@@ -380,12 +380,7 @@ void *LLVMGetPointerToGlobal(LLVMExecutionEngineRef EE, LLVMValueRef Global) {
   return unwrap(EE)->getPointerToGlobal(unwrap<GlobalValue>(Global));
 }
 
-MiriPointer LLVMGetMiriPointerToGlobalByName(LLVMExecutionEngineRef EE,
-                                             const char *Name) {
-  return unwrap(EE)->getMiriPointerToGlobalByName(Name);
-}
-
-void LLVMSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE, MiriRegisterGlobalHook GlobalHook) {
+void LLVMExecutionEngineSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE, MiriRegisterGlobalHook GlobalHook) {
   assert(GlobalHook && "GlobalHook must be non-null");
   unwrap(EE)->setMiriRegisterGlobalHook(GlobalHook);
 }

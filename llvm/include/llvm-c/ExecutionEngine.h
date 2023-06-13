@@ -232,6 +232,9 @@ void LLVMExecutionEngineSetMiriIntToPtr(LLVMExecutionEngineRef EE,
 void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
                                         MiriPtrToInt IncomingPtrToInt);
 
+void LLVMExecutionEngineSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE,
+                                                 MiriRegisterGlobalHook Hook);
+
 LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
                                    uint64_t ThreadID);
 
@@ -248,8 +251,6 @@ void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
 
 void LLVMGenericValueCopy(LLVMGenericValueRef Src, LLVMGenericValueRef Dest);
 
-MiriPointer LLVMGetMiriPointerToGlobalByName(LLVMExecutionEngineRef EE,
-                                             const char *Name);
 /*===-- Operations on memory managers -------------------------------------===*/
 
 typedef uint8_t *(*LLVMMemoryManagerAllocateCodeSectionCallback)(

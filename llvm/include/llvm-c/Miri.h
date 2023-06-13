@@ -49,7 +49,7 @@ typedef bool (*MiriMemcpy)(void *, MiriPointer, const char *, uint64_t);
 typedef MiriPointer (*MiriIntToPtr)(void *, uint64_t);
 typedef uint64_t (*MiriPtrToInt)(void *, MiriPointer);
 
-typedef MiriPointer (*MiriAllocationHook)(void *, uint64_t, uint64_t);
+typedef MiriPointer (*MiriAllocationHook)(void *, uint64_t, uint64_t, bool);
 typedef bool (*MiriFreeHook)(void *, MiriPointer);
 typedef bool (*MiriLoadStoreHook)(void *, LLVMGenericValueRef, MiriPointer,
                                   LLVMTypeRef, uint64_t, uint64_t);

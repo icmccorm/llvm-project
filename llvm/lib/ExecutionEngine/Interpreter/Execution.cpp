@@ -1166,7 +1166,8 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
 
   if (Interpreter::ExecutionEngine::miriIsInitialized()) {
     MiriPointer MiriPointerVal = Interpreter::ExecutionEngine::MiriMalloc(
-        Interpreter::ExecutionEngine::MiriWrapper, MemToAlloc, Alignment, false);
+        Interpreter::ExecutionEngine::MiriWrapper, MemToAlloc, Alignment,
+        false);
     LLVM_DEBUG(dbgs() << "Miri Allocated Type: " << *Ty << " (" << TypeSize
                       << " bytes) x " << NumElements
                       << " (Total: " << MemToAlloc << ") at "
@@ -1313,40 +1314,40 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   // If it is an unknown intrinsic function, use the intrinsic lowering
   // class to transform it into hopefully tasty LLVM code.
   //
-  BasicBlock::iterator Me(&I);
-  BasicBlock *Parent = I.getParent();
-  bool atBegin(Parent->begin() == Me);
-  if (!atBegin)
-    --Me;
+  cout << "intrinsic stuff" << endl;
 
   switch (I.getIntrinsicID()) {
-  case Intrinsic::objectsize:
-    SetValue(&I,
-             getOperandValue(
-                 lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
-             SF);
-    ++SF.CurInst;
-    return;
-  case Intrinsic::is_constant: {
-    Value *Flag = ConstantInt::getFalse(I.getType());
-    if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
-      if (C->isManifestConstant())
-        Flag = ConstantInt::getTrue(I.getType());
-    SetValue(&I, getOperandValue(Flag, SF), SF);
-    ++SF.CurInst;
-  }
-    return;
-  default: {
-    IL->LowerIntrinsicCall(&I);
-  } break;
-  }
-  // Restore the CurInst pointer to the first instruction newly inserted, if
-  // any.
-  if (atBegin) {
-    SF.CurInst = Parent->begin();
-  } else {
-    SF.CurInst = Me;
-    ++SF.CurInst;
+    case Intrinsic::objectsize: {
+      SetValue(&I,
+              getOperandValue(
+                  lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
+              SF);
+      ++SF.CurInst;
+    }   return;
+    case Intrinsic::is_constant: {
+      Value *Flag = ConstantInt::getFalse(I.getType());
+      if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
+        if (C->isManifestConstant())
+          Flag = ConstantInt::getTrue(I.getType());
+      SetValue(&I, getOperandValue(Flag, SF), SF);
+      ++SF.CurInst;
+    }  return;
+    default: {
+      BasicBlock::iterator Me(&I);
+      BasicBlock *Parent = I.getParent();
+      bool atBegin(Parent->begin() == Me);
+      if (!atBegin)
+        --Me;
+      IL->LowerIntrinsicCall(&I);
+      // Restore the CurInst pointer to the first instruction newly inserted, if
+      // any.
+      if (atBegin) {
+        SF.CurInst = Parent->begin();
+      } else {
+        SF.CurInst = Me;
+        ++SF.CurInst;
+      }
+    } break;
   }
 }
 
@@ -1366,7 +1367,7 @@ void Interpreter::visitCallBase(CallBase &I) {
     Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
                                            ReturnPointer);
     return;
-  }else{
+  } else {
     callFunction(SRC, ArgVals);
   }
 }

@@ -1322,7 +1322,6 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
               getOperandValue(
                   lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
               SF);
-      ++SF.CurInst;
     }   return;
     case Intrinsic::is_constant: {
       Value *Flag = ConstantInt::getFalse(I.getType());
@@ -1330,7 +1329,6 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
         if (C->isManifestConstant())
           Flag = ConstantInt::getTrue(I.getType());
       SetValue(&I, getOperandValue(Flag, SF), SF);
-      ++SF.CurInst;
     }  return;
     default: {
       BasicBlock::iterator Me(&I);

@@ -1314,7 +1314,6 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   // If it is an unknown intrinsic function, use the intrinsic lowering
   // class to transform it into hopefully tasty LLVM code.
   //
-  cout << "intrinsic stuff" << endl;
 
   switch (I.getIntrinsicID()) {
     case Intrinsic::objectsize: {

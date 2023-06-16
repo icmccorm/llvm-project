@@ -1316,35 +1316,37 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   //
 
   switch (I.getIntrinsicID()) {
-    case Intrinsic::objectsize: {
-      SetValue(&I,
-              getOperandValue(
-                  lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
-              SF);
-    }   return;
-    case Intrinsic::is_constant: {
-      Value *Flag = ConstantInt::getFalse(I.getType());
-      if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
-        if (C->isManifestConstant())
-          Flag = ConstantInt::getTrue(I.getType());
-      SetValue(&I, getOperandValue(Flag, SF), SF);
-    }  return;
-    default: {
-      BasicBlock::iterator Me(&I);
-      BasicBlock *Parent = I.getParent();
-      bool atBegin(Parent->begin() == Me);
-      if (!atBegin)
-        --Me;
-      IL->LowerIntrinsicCall(&I);
-      // Restore the CurInst pointer to the first instruction newly inserted, if
-      // any.
-      if (atBegin) {
-        SF.CurInst = Parent->begin();
-      } else {
-        SF.CurInst = Me;
-        ++SF.CurInst;
-      }
-    } break;
+  case Intrinsic::objectsize: {
+    SetValue(&I,
+             getOperandValue(
+                 lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
+             SF);
+  }
+    return;
+  case Intrinsic::is_constant: {
+    Value *Flag = ConstantInt::getFalse(I.getType());
+    if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
+      if (C->isManifestConstant())
+        Flag = ConstantInt::getTrue(I.getType());
+    SetValue(&I, getOperandValue(Flag, SF), SF);
+  }
+    return;
+  default: {
+    BasicBlock::iterator Me(&I);
+    BasicBlock *Parent = I.getParent();
+    bool atBegin(Parent->begin() == Me);
+    if (!atBegin)
+      --Me;
+    IL->LowerIntrinsicCall(&I);
+    // Restore the CurInst pointer to the first instruction newly inserted, if
+    // any.
+    if (atBegin) {
+      SF.CurInst = Parent->begin();
+    } else {
+      SF.CurInst = Me;
+      ++SF.CurInst;
+    }
+  } break;
   }
 }
 
@@ -1363,6 +1365,7 @@ void Interpreter::visitCallBase(CallBase &I) {
     GenericValue *ReturnPointer = &SF.AwaitingReturn;
     Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
                                            ReturnPointer);
+    CallingSF.MustResolvePendingReturn = true;
     return;
   } else {
     callFunction(SRC, ArgVals);
@@ -2386,6 +2389,7 @@ void Interpreter::callFunction(GenericValue FuncPointer,
     callExternalFunction(F, ArgVals, ReturnPointer);
     // Simulate a 'ret' instruction of the appropriate type.
     Interpreter::popContext();
+    Interpreter::context().MustResolvePendingReturn = true;
     return;
   }
 

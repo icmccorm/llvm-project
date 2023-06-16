@@ -90,11 +90,14 @@ bool Interpreter::stepThread(uint64_t ThreadID) {
   // Interpret a single instruction & increment the "PC".
   ExecutionContext &CallingSF = Interpreter::context();
 
-  if (CallingSF.Caller) {
+  if (CallingSF.MustResolvePendingReturn) {
+    CallingSF.MustResolvePendingReturn = false;
+    Instruction &I = *(std::prev(CallingSF.CurInst));
+    CallBase &Caller = static_cast<CallBase>(I);
     GenericValue Result = getPendingReturnValue();
-    if (!CallingSF.Caller->getType()->isVoidTy())
-      CallingSF.Values[(Value *)CallingSF.Caller] = Result;
-    if (InvokeInst *II = dyn_cast<InvokeInst>(CallingSF.Caller))
+    if (!Caller.getType()->isVoidTy())
+      CallingSF.Values[(Value *)&Caller] = Result;
+    if (InvokeInst *II = dyn_cast<InvokeInst>(&Caller))
       SwitchToNewBasicBlock(II->getNormalDest(), CallingSF);
     CallingSF.Caller = nullptr; // We returned from the call...
   }

@@ -86,6 +86,7 @@ struct ExecutionContext {
   BasicBlock *CurBB;            // The currently executing BB
   BasicBlock::iterator CurInst; // The next instruction to execute
   CallBase *Caller;             // Holds the call that called subframes.
+  bool MustResolvePendingReturn;
   GenericValue AwaitingReturn; // If non-null, the return value of the call into
                                // Rust NULL if main func or debugger invoked fn
   std::map<Value *, GenericValue> Values; // LLVM values used in this invocation
@@ -94,7 +95,8 @@ struct ExecutionContext {
   MiriAllocaHolder MiriAllocas;
   ExecutionContext(void *Wrapper, MiriFreeHook MiriFree)
       : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr), Caller(nullptr),
-        AwaitingReturn(GenericValue(0)), MiriAllocas(Wrapper, MiriFree) {}
+        MustResolvePendingReturn(false), AwaitingReturn(GenericValue(0)),
+        MiriAllocas(Wrapper, MiriFree) {}
 };
 
 class ExecutionThread {
@@ -197,7 +199,6 @@ public:
                   .AwaitingReturn;
     }
   }
-  
 
   GenericValue getPendingReturnValue() {
     return getCurrentThread()->ECStack.back().AwaitingReturn;

@@ -1365,7 +1365,7 @@ void Interpreter::visitCallBase(CallBase &I) {
     GenericValue *ReturnPointer = &SF.AwaitingReturn;
     Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
                                            ReturnPointer);
-    CallingSF.MustResolvePendingReturn = true;
+    SF.MustResolvePendingReturn = true;
     return;
   } else {
     callFunction(SRC, ArgVals);

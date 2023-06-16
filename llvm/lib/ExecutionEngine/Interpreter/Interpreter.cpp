@@ -93,7 +93,7 @@ bool Interpreter::stepThread(uint64_t ThreadID) {
   if (CallingSF.MustResolvePendingReturn) {
     CallingSF.MustResolvePendingReturn = false;
     Instruction &I = *(std::prev(CallingSF.CurInst));
-    CallBase &Caller = static_cast<CallBase>(I);
+    CallBase &Caller = static_cast<CallBase&>(I);
     GenericValue Result = getPendingReturnValue();
     if (!Caller.getType()->isVoidTy())
       CallingSF.Values[(Value *)&Caller] = Result;

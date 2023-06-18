@@ -375,9 +375,6 @@ void Interpreter::callExternalFunction(Function *F,
   } else {
     CallMiriFunctionByName(F, ArgVals, ReturnPlace);
   }
-#ifndef USE_LIBFFI
-  errs() << "Recompiling LLVM with --enable-libffi might help.\n";
-#endif
 }
 
 //===----------------------------------------------------------------------===//

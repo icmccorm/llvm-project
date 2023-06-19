@@ -175,6 +175,7 @@ protected:
   MiriIntToPtr MIntToPtr = nullptr;
   MiriPtrToInt MPtrToInt = nullptr;
   MiriRegisterGlobalHook MiriRegisterGlobal = nullptr;
+
 public:
   /// lock - This lock protects the ExecutionEngine and MCJIT classes. It must
   /// be held while changing the internal state of any of those classes.
@@ -339,7 +340,7 @@ public:
   void addGlobalMapping(StringRef Name, uint64_t Addr);
 
   MiriPointer getMiriPointerToGlobalByName(const std::string &Name);
-  
+
   void addMiriProvenanceEntry(const MiriPointer &Pointer);
 
   /// clearAllGlobalMappings - Clear all global mappings and start over again,
@@ -585,15 +586,18 @@ public:
   bool miriIsInitialized() {
     return MiriWrapper && MiriCallByName && MiriCallByPointer &&
            MiriStackTraceRecorder && MiriLoad && MiriStore && MiriMalloc &&
-           MiriFree && MMemset && MMemcpy && MIntToPtr && MPtrToInt && MiriRegisterGlobal;
+           MiriFree && MMemset && MMemcpy && MIntToPtr && MPtrToInt &&
+           MiriRegisterGlobal;
   }
 
   virtual GenericValue *createThread(uint64_t NextThreadID, Function *F,
-                                        ArrayRef<GenericValue> ArgValues) = 0;
-                                        
-  virtual bool stepThread(uint64_t ThreadID) = 0; // Execute a single instruction
+                                     std::vector<GenericValue> Args) = 0;
+
+  virtual bool
+  stepThread(uint64_t ThreadID, GenericValue* PendingReturnValue) = 0; // Execute a single instruction
   virtual bool hasThread(uint64_t ThreadID) = 0;
   virtual void terminateThread(uint64_t ThreadID) = 0;
+
 protected:
   ExecutionEngine(DataLayout DL) : DL(std::move(DL)) {}
   explicit ExecutionEngine(DataLayout DL, std::unique_ptr<Module> M);

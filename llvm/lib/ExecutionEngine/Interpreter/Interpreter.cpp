@@ -54,7 +54,7 @@ Interpreter::Interpreter(std::unique_ptr<Module> M)
     : ExecutionEngine(std::move(M)) {
   // Initialize the "backend"
   initializeExecutionEngine();
-  initializeExternalFunctions();
+  //initializeExternalFunctions();
 
   IL = new IntrinsicLowering(getDataLayout());
 }
@@ -70,14 +70,14 @@ void Interpreter::runAtExitHandlers() {
 }
 
 GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
-                                        ArrayRef<GenericValue> ArgValues) {
+                                        std::vector<GenericValue> Args) {
   assert(F && "Function *F was null at entry to run()");
-  Interpreter::createThreadContext(NextThreadID);
+  ArrayRef<GenericValue> ArgsRef =
+      Interpreter::createThreadContext(NextThreadID, Args);
   uint64_t PrevThread = Interpreter::switchThread(NextThreadID);
-
   const size_t ArgCount = F->getFunctionType()->getNumParams();
   ArrayRef<GenericValue> ActualArgs =
-      ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
+      ArgsRef.slice(0, std::min(ArgsRef.size(), ArgCount));
   // Set up the function call.
   callFunction(PTOGV(F), ActualArgs);
   GenericValue *ReturnValRef = &Interpreter::getCurrentThread()->ExitValue;
@@ -85,21 +85,30 @@ GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
   return ReturnValRef;
 }
 
-bool Interpreter::stepThread(uint64_t ThreadID) {
+bool Interpreter::stepThread(uint64_t ThreadID,
+                             GenericValue *PendingReturnValue) {
   Interpreter::switchThread(ThreadID);
   // Interpret a single instruction & increment the "PC".
   ExecutionContext &CallingSF = Interpreter::context();
 
   if (CallingSF.MustResolvePendingReturn) {
     CallingSF.MustResolvePendingReturn = false;
+    if (PendingReturnValue == nullptr) {
+      llvm_unreachable("Expected to receive a return value, but pending return "
+                       "value is null");
+    }
     Instruction &I = *(std::prev(CallingSF.CurInst));
-    CallBase &Caller = static_cast<CallBase&>(I);
-    GenericValue Result = getPendingReturnValue();
+    CallBase &Caller = static_cast<CallBase &>(I);
+    GenericValue Result = *PendingReturnValue;
     if (!Caller.getType()->isVoidTy())
       CallingSF.Values[(Value *)&Caller] = Result;
     if (InvokeInst *II = dyn_cast<InvokeInst>(&Caller))
       SwitchToNewBasicBlock(II->getNormalDest(), CallingSF);
     CallingSF.Caller = nullptr; // We returned from the call...
+  } else {
+    if (PendingReturnValue == nullptr) {
+      llvm_unreachable("Unexpectedly received a pending return value.");
+    }
   }
   Instruction &I = *CallingSF.CurInst++; // Increment before execute
 

@@ -107,6 +107,7 @@ public:
   std::vector<ExecutionContext> ECStack;
   GenericValue ExitValue; // The return value of the called function
   Type *DelayedReturn;
+  std::vector<GenericValue> InitArgs;
   ExecutionThread() : DelayedReturn(nullptr) {
     memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
   }
@@ -165,14 +166,26 @@ public:
     }
   }
 
-  ExecutionContext &context() { return getCurrentThread()->ECStack.back(); }
+  ExecutionContext &context() { 
+    if(getCurrentThread()->ECStack.empty())
+    {
+      llvm_unreachable("Empty stack");
+    }
+    else
+    {
+      return getCurrentThread()->ECStack.back(); 
+    }  
+  }
 
   GenericValue *getThreadExitValue() { return &getCurrentThread()->ExitValue; }
 
   void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
 
-  void createThreadContext(uint64_t ThreadID) {
+  ArrayRef<GenericValue> createThreadContext(uint64_t ThreadID,
+                                             std::vector<GenericValue> Args) {
     Threads[ThreadID] = ExecutionThread();
+    Threads[ThreadID].InitArgs = Args;
+    return Threads[ThreadID].InitArgs;
   }
 
   uint64_t switchThread(uint64_t ThreadID) {
@@ -190,17 +203,10 @@ public:
     }
   }
 
-  GenericValue *getReturnPlace() {
-    if (getCurrentThread()->ECStack.size() < 2) {
-      return getThreadExitValue();
-    } else {
-      return &getCurrentThread()
-                  ->ECStack[getCurrentThread()->ECStack.size() - 2]
-                  .AwaitingReturn;
-    }
-  }
-
   GenericValue getPendingReturnValue() {
+    if (getCurrentThread()->ECStack.size() == 0) {
+      llvm_unreachable("Cannot resolve pending return value; stack is empty.");
+    }
     return getCurrentThread()->ECStack.back().AwaitingReturn;
   }
 
@@ -235,8 +241,9 @@ public:
   void callFunction(GenericValue F, ArrayRef<GenericValue> ArgVals);
   void run(); // Execute instructions until nothing left to do
   GenericValue *createThread(uint64_t NextThreadID, Function *F,
-                             ArrayRef<GenericValue> ArgValues) override;
-  bool stepThread(uint64_t ThreadID) override; // Execute a single instruction
+                             std::vector<GenericValue> Args) override;
+  bool stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue)
+      override; // Execute a single instruction
   bool hasThread(uint64_t ThreadID) override;
   void terminateThread(uint64_t ThreadID) override;
 
@@ -298,14 +305,11 @@ public:
   GenericValue *resolveReturnPlaceLocation(ExecutionContext *CallingContext,
                                            Type *RetTy);
 
-  void callExternalFunction(Function *F, ArrayRef<GenericValue> ArgVals,
-                            GenericValue *ReturnPlace);
+  void callExternalFunction(Function *F, ArrayRef<GenericValue> ArgVals);
 
-  void CallMiriFunctionByName(Function *F, ArrayRef<GenericValue> ArgVals,
-                              GenericValue *ReturnPlace);
+  void CallMiriFunctionByName(Function *F, ArrayRef<GenericValue> ArgVals);
   void CallMiriFunctionByPointer(FunctionType *FType, GenericValue FuncPtr,
-                                 ArrayRef<GenericValue> ArgVals,
-                                 GenericValue *ReturnPlace);
+                                 ArrayRef<GenericValue> ArgVals);
 
   void exitCalled(GenericValue GV);
 
@@ -326,7 +330,7 @@ private: // Helper functions
   void *getPointerToFunction(Function *F) override { return (void *)F; }
 
   void initializeExecutionEngine() {}
-  void initializeExternalFunctions();
+  //void initializeExternalFunctions();
   GenericValue getConstantExprValue(ConstantExpr *CE, ExecutionContext &SF);
   GenericValue getOperandValue(Value *V, ExecutionContext &SF);
   GenericValue executeTruncInst(Value *SrcVal, Type *DstTy,

@@ -380,7 +380,8 @@ void *LLVMGetPointerToGlobal(LLVMExecutionEngineRef EE, LLVMValueRef Global) {
   return unwrap(EE)->getPointerToGlobal(unwrap<GlobalValue>(Global));
 }
 
-void LLVMExecutionEngineSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE, MiriRegisterGlobalHook GlobalHook) {
+void LLVMExecutionEngineSetMiriRegisterGlobalHook(
+    LLVMExecutionEngineRef EE, MiriRegisterGlobalHook GlobalHook) {
   assert(GlobalHook && "GlobalHook must be non-null");
   unwrap(EE)->setMiriRegisterGlobalHook(GlobalHook);
 }
@@ -496,9 +497,10 @@ void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
 }
 
 LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
-                                       uint64_t ThreadID) {
+                                       uint64_t ThreadID,
+                                       LLVMGenericValueRef PendingReturnVal) {
   auto *ExecEngine = unwrap(EE);
-  return (LLVMBool)(ExecEngine->stepThread(ThreadID));
+  return (LLVMBool)(ExecEngine->stepThread(ThreadID, unwrap(PendingReturnVal)));
 }
 
 LLVMGenericValueRef LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
@@ -528,10 +530,6 @@ void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
                                         uint64_t ThreadID) {
   auto *ExecEngine = unwrap(EE);
   ExecEngine->terminateThread(ThreadID);
-}
-
-void LLVMGenericValueCopy(LLVMGenericValueRef Src, LLVMGenericValueRef Dest) {
-  *unwrap(Dest) = *unwrap(Src);
 }
 
 /*===-- Operations on memory managers -------------------------------------===*/

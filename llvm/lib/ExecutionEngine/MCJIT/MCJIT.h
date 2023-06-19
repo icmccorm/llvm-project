@@ -315,8 +315,8 @@ public:
                             bool CheckFunctionsOnly);
 
   GenericValue *createThread(uint64_t NextThreadID, Function *F,
-            ArrayRef<GenericValue> ArgValues) override;
-  bool stepThread(uint64_t ThreadID) override; // Execute a single instruction
+            std::vector<GenericValue> Args) override;
+  bool stepThread(uint64_t ThreadID, GenericValue* PendingReturnValue) override; // Execute a single instruction
   bool hasThread(uint64_t ThreadID) override;
   void terminateThread(uint64_t ThreadID) override;
 protected:

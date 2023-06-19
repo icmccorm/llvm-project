@@ -57,9 +57,13 @@
 
 using namespace llvm;
 
+/*
+
 static ManagedStatic<sys::Mutex> FunctionsLock;
 
 typedef GenericValue (*ExFunc)(FunctionType *, ArrayRef<GenericValue>);
+
+
 static ManagedStatic<std::map<const Function *, ExFunc>> ExportedFunctions;
 static ManagedStatic<std::map<std::string, ExFunc>> FuncNames;
 
@@ -69,6 +73,7 @@ static ManagedStatic<std::map<const Function *, RawFunc>> RawFunctions;
 #endif
 
 static Interpreter *TheInterpreter;
+
 
 static char getTypeID(Type *Ty) {
   switch (Ty->getTypeID()) {
@@ -289,91 +294,85 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
   return false;
 }
 #endif // USE_LIBFFI
+*/
 
 void Interpreter::CallMiriFunctionByPointer(FunctionType *FType,
                                             GenericValue FuncPtr,
-                                            ArrayRef<GenericValue> ArgVals,
-                                            GenericValue *ReturnPlace) {
+                                            ArrayRef<GenericValue> ArgVals) {
   MiriPointer MiriFuncPtr = GVTOMiriPointer(FuncPtr);
   LLVMGenericValueArrayRef ArgsArrayRef = wrap(&ArgVals);
   LLVMTypeRef FTypeRef = wrap(FType);
-  LLVMGenericValueRef ReturnPlaceRef = wrap(ReturnPlace);
-  bool HadError =
-      Interpreter::MiriCallByPointer(ExecutionEngine::MiriWrapper, MiriFuncPtr,
-                                     ArgsArrayRef, FTypeRef, ReturnPlaceRef);
+  bool HadError = Interpreter::MiriCallByPointer(
+      ExecutionEngine::MiriWrapper, MiriFuncPtr, ArgsArrayRef, FTypeRef);
   if (HadError) {
     Interpreter::registerMiriErrorWithoutLocation();
   }
 }
 
 void Interpreter::CallMiriFunctionByName(Function *F,
-                                         ArrayRef<GenericValue> ArgVals,
-                                         GenericValue *ReturnPlace) {
+                                         ArrayRef<GenericValue> ArgVals) {
   StringRef Name = F->getName();
   const char *NamePtr = Name.data();
   uint64_t NameLength = Name.size();
-
+  
   FunctionType *FType = F->getFunctionType();
   LLVMTypeRef FTypeRef = wrap(FType);
   LLVMGenericValueArrayRef ArgsArrayRef = wrap(&ArgVals);
-  LLVMGenericValueRef ReturnPlaceRef = wrap(ReturnPlace);
-  bool HadError = Interpreter::MiriCallByName(ExecutionEngine::MiriWrapper,
-                                              ArgsArrayRef, NamePtr, NameLength,
-                                              FTypeRef, ReturnPlaceRef);
+  bool HadError =
+      Interpreter::MiriCallByName(ExecutionEngine::MiriWrapper, ArgsArrayRef,
+                                  NamePtr, NameLength, FTypeRef);
   if (HadError) {
     Interpreter::registerMiriErrorWithoutLocation();
   }
 }
 
 void Interpreter::callExternalFunction(Function *F,
-                                       ArrayRef<GenericValue> ArgVals,
-                                       GenericValue *ReturnPlace) {
+                                       ArrayRef<GenericValue> ArgVals) {
+                                          /*
   TheInterpreter = this;
   std::unique_lock<sys::Mutex> Guard(*FunctionsLock);
 
-  // Do a lookup to see if the function is in our cache... this should just be a
-  // deferred annotation!
-  std::map<const Function *, ExFunc>::iterator FI = ExportedFunctions->find(F);
-  if (ExFunc Fn =
-          (FI == ExportedFunctions->end()) ? lookupFunction(F) : FI->second) {
+    // Do a lookup to see if the function is in our cache... this should just be
+  a
+    // deferred annotation!
+    std::map<const Function *, ExFunc>::iterator FI =
+  ExportedFunctions->find(F); if (ExFunc Fn = (FI == ExportedFunctions->end()) ?
+  lookupFunction(F) : FI->second) { Guard.unlock(); GenericValue Result =
+  Fn(F->getFunctionType(), ArgVals); if (ReturnPlace) { *ReturnPlace = Result;
+      }
+      return;
+    }
+
+  #ifdef USE_LIBFFI
+    std::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
+    RawFunc RawFn;
+    if (RF == RawFunctions->end()) {
+      RawFn = (RawFunc)(intptr_t)sys::DynamicLibrary::SearchForAddressOfSymbol(
+          std::string(F->getName()));
+      if (!RawFn)
+        RawFn = (RawFunc)(intptr_t)getPointerToGlobalIfAvailable(F);
+      if (RawFn != 0)
+        RawFunctions->insert(std::make_pair(F, RawFn)); // Cache for later
+    } else {
+      RawFn = RF->second;
+    }
+
     Guard.unlock();
-    GenericValue Result = Fn(F->getFunctionType(), ArgVals);
-    if (ReturnPlace) {
-      *ReturnPlace = Result;
+
+    GenericValue Result;
+    if (RawFn != 0 && ffiInvoke(RawFn, F, ArgVals, getDataLayout(), Result)) {
+      if (ReturnPlace) {
+        *ReturnPlace = Result;
+      }
+      return;
     }
-    return;
-  }
-
-#ifdef USE_LIBFFI
-  std::map<const Function *, RawFunc>::iterator RF = RawFunctions->find(F);
-  RawFunc RawFn;
-  if (RF == RawFunctions->end()) {
-    RawFn = (RawFunc)(intptr_t)sys::DynamicLibrary::SearchForAddressOfSymbol(
-        std::string(F->getName()));
-    if (!RawFn)
-      RawFn = (RawFunc)(intptr_t)getPointerToGlobalIfAvailable(F);
-    if (RawFn != 0)
-      RawFunctions->insert(std::make_pair(F, RawFn)); // Cache for later
-  } else {
-    RawFn = RF->second;
-  }
-
-  Guard.unlock();
-
-  GenericValue Result;
-  if (RawFn != 0 && ffiInvoke(RawFn, F, ArgVals, getDataLayout(), Result)) {
-    if (ReturnPlace) {
-      *ReturnPlace = Result;
-    }
-    return;
-  }  
-#endif // USE_LIBFFI
-
+  #endif // USE_LIBFFI
+  */
   if (F->getName() == "__main") {
     errs() << "Tried to execute an unknown external function: " << *F->getType()
            << " __main\n";
   } else {
-    CallMiriFunctionByName(F, ArgVals, ReturnPlace);
+    CallMiriFunctionByName(F, ArgVals);
   }
 }
 
@@ -381,6 +380,7 @@ void Interpreter::callExternalFunction(Function *F,
 //  Functions "exported" to the running application...
 //
 
+/*
 // void atexit(Function*)
 static GenericValue lle_X_atexit(FunctionType *FT,
                                  ArrayRef<GenericValue> Args) {
@@ -526,8 +526,9 @@ static GenericValue lle_X_printf(FunctionType *FT,
 }
 
 void Interpreter::initializeExternalFunctions() {
-  sys::ScopedLock Writer(*FunctionsLock);
-  (*FuncNames)["lle_X_atexit"] = lle_X_atexit;
-  (*FuncNames)["lle_X_exit"] = lle_X_exit;
-  (*FuncNames)["lle_X_abort"] = lle_X_abort;
+  //sys::ScopedLock Writer(*FunctionsLock);
+  //(*FuncNames)["lle_X_atexit"] = lle_X_atexit;
+  //(*FuncNames)["lle_X_exit"] = lle_X_exit;
+  //(*FuncNames)["lle_X_abort"] = lle_X_abort;
 }
+*/

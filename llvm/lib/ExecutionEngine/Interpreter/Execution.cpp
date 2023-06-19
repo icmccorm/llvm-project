@@ -1362,9 +1362,7 @@ void Interpreter::visitCallBase(CallBase &I) {
   // and treat it as a function pointer.
   GenericValue SRC = getOperandValue(SF.Caller->getCalledOperand(), SF);
   if (SRC.Provenance.alloc_id != 0) {
-    GenericValue *ReturnPointer = &SF.AwaitingReturn;
-    Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals,
-                                           ReturnPointer);
+    Interpreter::CallMiriFunctionByPointer(I.getFunctionType(), SRC, ArgVals);
     SF.MustResolvePendingReturn = true;
     return;
   } else {
@@ -2382,34 +2380,29 @@ void Interpreter::callFunction(GenericValue FuncPointer,
       Interpreter::ExecutionEngine::MiriFree);
   ExecutionContext &StackFrame = Interpreter::context();
   StackFrame.CurFunction = F;
-
   // Special handling for external functions.
   if (F->isDeclaration()) {
-    GenericValue *ReturnPointer = Interpreter::getReturnPlace();
-    callExternalFunction(F, ArgVals, ReturnPointer);
+    callExternalFunction(F, ArgVals);
     // Simulate a 'ret' instruction of the appropriate type.
     Interpreter::popContext();
-    Interpreter::context().MustResolvePendingReturn = true;
+    if (!Interpreter::stackIsEmpty())
+      Interpreter::context().MustResolvePendingReturn = true;
     return;
   }
-
   // Get pointers to first LLVM BB & Instruction in function.
   StackFrame.CurBB = &F->front();
   StackFrame.CurInst = StackFrame.CurBB->begin();
-
   // Run through the function arguments and initialize their values...
   assert(
       (ArgVals.size() == F->arg_size() ||
        (ArgVals.size() > F->arg_size() && F->getFunctionType()->isVarArg())) &&
       "Invalid number of values passed to function invocation!");
-
   // Handle non-varargs arguments...
   unsigned i = 0;
   for (Function::arg_iterator AI = F->arg_begin(), E = F->arg_end(); AI != E;
        ++AI, ++i) {
     SetValue(&*AI, ArgVals[i], StackFrame);
   }
-
   // Handle varargs arguments...
   StackFrame.VarArgs.assign(ArgVals.begin() + i, ArgVals.end());
 }

@@ -129,9 +129,9 @@ char *ExecutionEngine::getMemoryForGV(const GlobalVariable *GV) {
     MiriPointer RawMemory =
         ExecutionEngine::MiriMalloc(MiriWrapper, GVSize, Alignment, true);
     ExecutionEngine::addMiriProvenanceEntry(RawMemory);
-    ExecutionEngine::MiriRegisterGlobal(ExecutionEngine::MiriWrapper,
-                                        GV->getName().str().c_str(),
-                                        GV->getName().size(), RawMemory);
+    ExecutionEngine::MiriRegisterGlobal(
+        ExecutionEngine::MiriWrapper, GV->getName().str().c_str(),
+        GV->getName().str().length(), RawMemory);
     return (char *)RawMemory.addr;
   } else {
     report_fatal_error("Miri is not initialized");
@@ -1465,8 +1465,9 @@ void ExecutionEngine::emitGlobals() {
         // get a pointer to it.
         if (void *SymAddr = sys::DynamicLibrary::SearchForAddressOfSymbol(
                 std::string(GV.getName()))) {
-          llvm_unreachable("Miri + LLI doesn't support external variables from "
-                           "dynamically linked libraries.");
+          report_fatal_error(
+              "Miri + LLI doesn't support external variables from "
+              "dynamically linked libraries.");
         } else {
           addGlobalMapping(&GV, getMemoryForGV(&GV));
         }

@@ -1465,9 +1465,10 @@ void ExecutionEngine::emitGlobals() {
         // get a pointer to it.
         if (void *SymAddr = sys::DynamicLibrary::SearchForAddressOfSymbol(
                 std::string(GV.getName()))) {
-          report_fatal_error(
-              "Miri + LLI doesn't support external variables from "
-              "dynamically linked libraries.");
+          std::string ErrMsg = "Miri + LLI doesn't support external variables "
+                               "from dynamically linked libraries. Symbol: " +
+                               std::string(GV.getName());
+          report_fatal_error(StringRef(ErrMsg));
         } else {
           addGlobalMapping(&GV, getMemoryForGV(&GV));
         }

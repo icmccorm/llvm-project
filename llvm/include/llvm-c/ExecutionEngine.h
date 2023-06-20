@@ -238,10 +238,12 @@ void LLVMExecutionEngineSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE,
 LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
                                    uint64_t ThreadID, LLVMGenericValueRef PendingReturnVal);
 
-LLVMGenericValueRef
+void
 LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
                                 uint64_t ThreadID, LLVMValueRef F,
                                 unsigned NumArgs, LLVMGenericValueRef *Args);
+
+LLVMGenericValueRef LLVMExecutionEngineGetThreadExitValue(LLVMExecutionEngineRef EE, uint64_t ThreadID);
 
 LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,
                                       uint64_t ThreadID);

@@ -179,6 +179,8 @@ public:
 
   GenericValue *getThreadExitValue() { return &getCurrentThread()->ExitValue; }
 
+
+
   void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
 
   ArrayRef<GenericValue> createThreadContext(uint64_t ThreadID,
@@ -240,10 +242,11 @@ public:
 
   void callFunction(GenericValue F, ArrayRef<GenericValue> ArgVals);
   void run(); // Execute instructions until nothing left to do
-  GenericValue *createThread(uint64_t NextThreadID, Function *F,
+  void createThread(uint64_t NextThreadID, Function *F,
                              std::vector<GenericValue> Args) override;
   bool stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue)
       override; // Execute a single instruction
+  GenericValue *getThreadExitValueByID(uint64_t ThreadID) override;
   bool hasThread(uint64_t ThreadID) override;
   void terminateThread(uint64_t ThreadID) override;
 

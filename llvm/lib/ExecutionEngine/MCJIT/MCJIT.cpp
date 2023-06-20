@@ -683,7 +683,7 @@ JITSymbol LinkingSymbolResolver::findSymbol(const std::string &Name) {
 
 void LinkingSymbolResolver::anchor() {}
 
-GenericValue *MCJIT::createThread(uint64_t NextThreadID, Function *F,
+void MCJIT::createThread(uint64_t NextThreadID, Function *F,
                                        std::vector<GenericValue> Args) {
   report_fatal_error("MCJIT does not support simulated multithreading.");
 }
@@ -691,6 +691,11 @@ GenericValue *MCJIT::createThread(uint64_t NextThreadID, Function *F,
 bool MCJIT::stepThread(uint64_t ThreadID, GenericValue * PendingReturnValue) {
   report_fatal_error("MCJIT does not support simulated multithreading.");
 }
+
+GenericValue *MCJIT::getThreadExitValueByID(uint64_t ThreadID) {
+  report_fatal_error("MCJIT does not support simulated multithreading.");
+}
+
 bool MCJIT::hasThread(uint64_t ThreadID) {
   report_fatal_error("MCJIT does not support simulated multithreading.");
 }

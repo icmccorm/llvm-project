@@ -590,11 +590,12 @@ public:
            MiriRegisterGlobal;
   }
 
-  virtual GenericValue *createThread(uint64_t NextThreadID, Function *F,
+  virtual void createThread(uint64_t NextThreadID, Function *F,
                                      std::vector<GenericValue> Args) = 0;
 
   virtual bool
   stepThread(uint64_t ThreadID, GenericValue* PendingReturnValue) = 0; // Execute a single instruction
+  virtual GenericValue *getThreadExitValueByID(uint64_t ThreadID) = 0;
   virtual bool hasThread(uint64_t ThreadID) = 0;
   virtual void terminateThread(uint64_t ThreadID) = 0;
 

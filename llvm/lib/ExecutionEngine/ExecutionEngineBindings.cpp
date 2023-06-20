@@ -503,21 +503,24 @@ LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
   return (LLVMBool)(ExecEngine->stepThread(ThreadID, unwrap(PendingReturnVal)));
 }
 
-LLVMGenericValueRef LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
-                                                    uint64_t ThreadID,
-                                                    LLVMValueRef F,
-                                                    unsigned NumArgs,
-                                                    LLVMGenericValueRef *Args) {
-  unwrap(EE)->finalizeObject();
+LLVMGenericValueRef
+LLVMExecutionEngineGetThreadExitValue(LLVMExecutionEngineRef EE,
+                                      uint64_t ThreadID) {
+  auto *ExecEngine = unwrap(EE);
+  return wrap(ExecEngine->getThreadExitValueByID(ThreadID));
+}
+
+void LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
+                                     uint64_t ThreadID, LLVMValueRef F,
+                                     unsigned NumArgs,
+                                     LLVMGenericValueRef *Args) {
   auto *ExecEngine = unwrap(EE);
   ExecEngine->finalizeObject();
-
   std::vector<GenericValue> ArgVec;
   ArgVec.reserve(NumArgs);
   for (unsigned I = 0; I != NumArgs; ++I)
     ArgVec.push_back(*unwrap(Args[I]));
-
-  return wrap(ExecEngine->createThread(ThreadID, unwrap<Function>(F), ArgVec));
+  ExecEngine->createThread(ThreadID, unwrap<Function>(F), ArgVec);
 }
 
 LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,

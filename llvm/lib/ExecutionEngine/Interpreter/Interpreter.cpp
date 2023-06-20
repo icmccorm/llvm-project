@@ -54,7 +54,7 @@ Interpreter::Interpreter(std::unique_ptr<Module> M)
     : ExecutionEngine(std::move(M)) {
   // Initialize the "backend"
   initializeExecutionEngine();
-  //initializeExternalFunctions();
+  // initializeExternalFunctions();
 
   IL = new IntrinsicLowering(getDataLayout());
 }
@@ -69,7 +69,7 @@ void Interpreter::runAtExitHandlers() {
   }
 }
 
-GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
+void Interpreter::createThread(uint64_t NextThreadID, Function *F,
                                         std::vector<GenericValue> Args) {
   assert(F && "Function *F was null at entry to run()");
   ArrayRef<GenericValue> ArgsRef =
@@ -80,9 +80,7 @@ GenericValue *Interpreter::createThread(uint64_t NextThreadID, Function *F,
       ArgsRef.slice(0, std::min(ArgsRef.size(), ArgCount));
   // Set up the function call.
   callFunction(PTOGV(F), ActualArgs);
-  GenericValue *ReturnValRef = &Interpreter::getCurrentThread()->ExitValue;
   Interpreter::switchThread(PrevThread);
-  return ReturnValRef;
 }
 
 bool Interpreter::stepThread(uint64_t ThreadID,
@@ -116,6 +114,14 @@ bool Interpreter::stepThread(uint64_t ThreadID,
   visit(I); // Dispatch to one of the visit* methods...
 
   return Interpreter::stackIsEmpty();
+}
+
+GenericValue *Interpreter::getThreadExitValueByID(uint64_t ThreadID) {
+  if (!Interpreter::hasThread(ThreadID)) {
+    return nullptr;
+  } else {
+    return &Interpreter::getThread(ThreadID)->ExitValue;
+  }
 }
 
 void Interpreter::terminateThread(uint64_t ThreadID) {

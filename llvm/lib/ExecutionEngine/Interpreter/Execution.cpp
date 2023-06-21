@@ -1366,7 +1366,7 @@ void Interpreter::visitCallBase(CallBase &I) {
     SF.MustResolvePendingReturn = true;
     return;
   } else {
-    callFunction(SRC, ArgVals);
+    callFunction((Function*) GVTOP(SRC), ArgVals);
   }
 }
 
@@ -2368,12 +2368,11 @@ GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {
 //===----------------------------------------------------------------------===//
 // callFunction - Execute the specified function...
 //
-void Interpreter::callFunction(GenericValue FuncPointer,
+void Interpreter::callFunction(Function *F,
                                ArrayRef<GenericValue> ArgVals) {
   assert((Interpreter::stackIsEmpty() || !Interpreter::context().Caller ||
           Interpreter::context().Caller->arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");
-  Function *F = cast<Function>((Function *)FuncPointer.PointerVal);
   // Make a new stack frame... and fill it in.
   Interpreter::currentStack().emplace_back(
       Interpreter::ExecutionEngine::MiriWrapper,

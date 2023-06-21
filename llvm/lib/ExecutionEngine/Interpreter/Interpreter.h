@@ -166,20 +166,15 @@ public:
     }
   }
 
-  ExecutionContext &context() { 
-    if(getCurrentThread()->ECStack.empty())
-    {
+  ExecutionContext &context() {
+    if (getCurrentThread()->ECStack.empty()) {
       llvm_unreachable("Empty stack");
+    } else {
+      return getCurrentThread()->ECStack.back();
     }
-    else
-    {
-      return getCurrentThread()->ECStack.back(); 
-    }  
   }
 
   GenericValue *getThreadExitValue() { return &getCurrentThread()->ExitValue; }
-
-
 
   void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
 
@@ -239,11 +234,10 @@ public:
 
   // Methods used to execute code:
   // Place a call on the stack
-
-  void callFunction(GenericValue F, ArrayRef<GenericValue> ArgVals);
+  void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
   void run(); // Execute instructions until nothing left to do
   void createThread(uint64_t NextThreadID, Function *F,
-                             std::vector<GenericValue> Args) override;
+                    std::vector<GenericValue> Args) override;
   bool stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue)
       override; // Execute a single instruction
   GenericValue *getThreadExitValueByID(uint64_t ThreadID) override;
@@ -333,7 +327,7 @@ private: // Helper functions
   void *getPointerToFunction(Function *F) override { return (void *)F; }
 
   void initializeExecutionEngine() {}
-  //void initializeExternalFunctions();
+  // void initializeExternalFunctions();
   GenericValue getConstantExprValue(ConstantExpr *CE, ExecutionContext &SF);
   GenericValue getOperandValue(Value *V, ExecutionContext &SF);
   GenericValue executeTruncInst(Value *SrcVal, Type *DstTy,

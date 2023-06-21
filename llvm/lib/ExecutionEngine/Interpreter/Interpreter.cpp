@@ -63,7 +63,7 @@ Interpreter::~Interpreter() { delete IL; }
 
 void Interpreter::runAtExitHandlers() {
   while (!AtExitHandlers.empty()) {
-    callFunction(PTOGV(AtExitHandlers.back()), ArrayRef<GenericValue>());
+    callFunction(AtExitHandlers.back(), ArrayRef<GenericValue>());
     AtExitHandlers.pop_back();
     run();
   }
@@ -79,7 +79,7 @@ void Interpreter::createThread(uint64_t NextThreadID, Function *F,
   ArrayRef<GenericValue> ActualArgs =
       ArgsRef.slice(0, std::min(ArgsRef.size(), ArgCount));
   // Set up the function call.
-  callFunction(PTOGV(F), ActualArgs);
+  callFunction(F, ActualArgs);
   Interpreter::switchThread(PrevThread);
 }
 
@@ -148,7 +148,7 @@ GenericValue Interpreter::runFunction(Function *F,
       ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
 
   // Set up the function call.
-  callFunction(PTOGV(F), ActualArgs);
+  callFunction(F, ActualArgs);
 
   // Start executing the function.
   run();

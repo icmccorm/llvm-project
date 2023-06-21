@@ -73,22 +73,30 @@ public:
   using MiriProvenanceMapTy = std::map<uint64_t, MiriProvenance>;
 
 private:
+  GlobalAddressMapTy ExternalGlobalAddressMap;
   /// GlobalAddressMap - A mapping between LLVM global symbol names values and
   /// their actualized version...
   GlobalAddressMapTy GlobalAddressMap;
-
   MiriProvenanceMapTy MiriProvenanceMap;
   /// GlobalAddressReverseMap - This is the reverse mapping of GlobalAddressMap,
   /// used to convert raw addresses into the LLVM global value that is emitted
   /// at the address.  This map is not computed unless getGlobalValueAtAddress
   /// is called at some point.
   std::map<uint64_t, std::string> GlobalAddressReverseMap;
+  std::map<uint64_t, std::string> ExternalGlobalAddressReverseMap;
 
 public:
+  GlobalAddressMapTy &getExternalGlobalAddressMap() {
+    return ExternalGlobalAddressMap;
+  }
   GlobalAddressMapTy &getGlobalAddressMap() { return GlobalAddressMap; }
   MiriProvenanceMapTy &getMiriProvenanceMap() { return MiriProvenanceMap; }
 
   std::map<uint64_t, std::string> &getGlobalAddressReverseMap() {
+    return GlobalAddressReverseMap;
+  }
+
+  std::map<uint64_t, std::string> &getExternalGlobalAddressReverseMap() {
     return GlobalAddressReverseMap;
   }
 
@@ -338,6 +346,10 @@ public:
 
   void addGlobalMapping(const GlobalValue *GV, void *Addr);
   void addGlobalMapping(StringRef Name, uint64_t Addr);
+
+  void addExternalGlobalMapping(const GlobalValue *GV, void *Addr);
+  void addExternalGlobalMapping(StringRef Name, uint64_t Addr);
+
 
   MiriPointer getMiriPointerToGlobalByName(const std::string &Name);
 
@@ -591,10 +603,11 @@ public:
   }
 
   virtual void createThread(uint64_t NextThreadID, Function *F,
-                                     std::vector<GenericValue> Args) = 0;
+                            std::vector<GenericValue> Args) = 0;
 
-  virtual bool
-  stepThread(uint64_t ThreadID, GenericValue* PendingReturnValue) = 0; // Execute a single instruction
+  virtual bool stepThread(
+      uint64_t ThreadID,
+      GenericValue *PendingReturnValue) = 0; // Execute a single instruction
   virtual GenericValue *getThreadExitValueByID(uint64_t ThreadID) = 0;
   virtual bool hasThread(uint64_t ThreadID) = 0;
   virtual void terminateThread(uint64_t ThreadID) = 0;

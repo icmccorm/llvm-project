@@ -186,12 +186,17 @@ GlobalVariable *ExecutionEngine::FindGlobalVariableNamed(StringRef Name,
 uint64_t ExecutionEngineState::RemoveMapping(StringRef Name) {
   GlobalAddressMapTy::iterator I = GlobalAddressMap.find(Name);
   uint64_t OldVal;
-
   // FIXME: This is silly, we shouldn't end up with a mapping -> 0 in the
   // GlobalAddressMap.
-  if (I == GlobalAddressMap.end())
-    OldVal = 0;
-  else {
+  if (I == GlobalAddressMap.end()) {
+    GlobalAddressMapTy::iterator ExI = ExternalGlobalAddressMap.find(Name);
+    if (ExI == ExternalGlobalAddressMap.end()) {
+      OldVal = 0;
+    } else {
+      OldVal = ExI->second;
+      ExternalGlobalAddressMap.erase(ExI);
+    }
+  } else {
     GlobalAddressReverseMap.erase(I->second);
     MiriProvenanceMap.erase(I->second);
     OldVal = I->second;
@@ -238,10 +243,31 @@ void ExecutionEngine::addGlobalMapping(const GlobalValue *GV, void *Addr) {
   addGlobalMapping(getMangledName(GV), (uint64_t)Addr);
 }
 
+void ExecutionEngine::addExternalGlobalMapping(const GlobalValue *GV,
+                                               void *Addr) {
+  std::lock_guard<sys::Mutex> locked(lock);
+  addExternalGlobalMapping(getMangledName(GV), (uint64_t)Addr);
+}
+
 void ExecutionEngine::addMiriProvenanceEntry(const MiriPointer &Pointer) {
   std::lock_guard<sys::Mutex> locked(lock);
   MiriProvenance &CurVal = EEState.getMiriProvenanceMap()[Pointer.addr];
   CurVal = Pointer.prov;
+}
+
+void ExecutionEngine::addExternalGlobalMapping(StringRef Name, uint64_t Addr) {
+  std::lock_guard<sys::Mutex> locked(lock);
+  assert(!Name.empty() && "Empty external GlobalMapping symbol name!");
+  uint64_t &CurVal = EEState.getExternalGlobalAddressMap()[Name];
+  assert((!CurVal || !Addr) && "External GlobalMapping already established!");
+  CurVal = Addr;
+  // If we are using the reverse mapping, add it too.
+  if (!EEState.getExternalGlobalAddressReverseMap().empty()) {
+    std::string &V = EEState.getExternalGlobalAddressReverseMap()[CurVal];
+    assert((!V.empty() || !Name.empty()) &&
+           "GlobalMapping already established!");
+    V = std::string(Name);
+  }
 }
 
 void ExecutionEngine::addGlobalMapping(StringRef Name, uint64_t Addr) {
@@ -267,7 +293,9 @@ void ExecutionEngine::clearAllGlobalMappings() {
   std::lock_guard<sys::Mutex> locked(lock);
   EEState.getMiriProvenanceMap().clear();
   EEState.getGlobalAddressMap().clear();
+  EEState.getExternalGlobalAddressMap().clear();
   EEState.getGlobalAddressReverseMap().clear();
+  EEState.getExternalGlobalAddressReverseMap().clear();
 }
 
 void ExecutionEngine::clearGlobalMappingsFromModule(Module *M) {
@@ -1465,10 +1493,13 @@ void ExecutionEngine::emitGlobals() {
         // get a pointer to it.
         if (void *SymAddr = sys::DynamicLibrary::SearchForAddressOfSymbol(
                 std::string(GV.getName()))) {
+          addGlobalMapping(&GV, SymAddr);
+          /*
           std::string ErrMsg = "Miri + LLI doesn't support external variables "
                                "from dynamically linked libraries. Symbol: " +
                                std::string(GV.getName());
           report_fatal_error(StringRef(ErrMsg));
+          */
         } else {
           addGlobalMapping(&GV, getMemoryForGV(&GV));
         }

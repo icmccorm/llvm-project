@@ -1331,6 +1331,77 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     SetValue(&I, getOperandValue(Flag, SF), SF);
   }
     return;
+
+
+
+  case Intrinsic::fmuladd: {
+    /* R = Src1 * Src2 + Src3 */
+
+    Type *Ty = I.getOperand(0)->getType();
+    GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
+    GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
+    GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
+    GenericValue R;
+
+    if (cast<VectorType>(Ty)->getElementType()->isFloatTy()) {
+      R.FloatVal = Src1.FloatVal * Src2.FloatVal + Src3.FloatVal;
+    }
+
+    if (cast<VectorType>(Ty)->getElementType()->isDoubleTy()) {
+      R.DoubleVal = Src1.DoubleVal * Src2.DoubleVal + Src3.DoubleVal;
+    }
+    SetValue(&I, R, SF);
+    ++SF.CurInst;
+    return;
+  } 
+
+  case Intrinsic::fshl: {
+    
+    /* R = ( Src1 concat Src2 ) rotateL Src3 */
+    /*   = ( Src1 concat Src2 ) << Src3 | (Src1 concat Src2 ) >> ( T - Src-3 ) */
+
+    Type *Ty = I.getOperand(0)->getType();
+    GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
+    GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
+    GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
+    GenericValue R;
+
+    if (cast<VectorType>(Ty)->getElementType()->isIntegerTy()) {
+      assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
+      unsigned bitWidth = Src1.IntVal.getBitWidth();
+      APInt concat = Src1.IntVal <<=  bitWidth | Src2.IntVal;
+      R.IntVal = concat.rotl(Src3.IntVal);
+    }
+    SetValue(&I, R, SF);
+    ++SF.CurInst;
+    return;
+  }
+
+    case Intrinsic::fshr: {
+    
+    /* R = ( Src1 concat Src2 ) rotateR Src3 */
+    /*   = ( Src1 concat Src2 ) >> Src3 | (Src1 concat Src2 ) << ( T - Src-3 ) */
+
+    Type *Ty = I.getOperand(0)->getType();
+    GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
+    GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
+    GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
+    GenericValue R;
+
+    if (cast<VectorType>(Ty)->getElementType()->isIntegerTy()) {
+      assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
+      unsigned bitWidth = Src1.IntVal.getBitWidth();
+      APInt concat = Src1.IntVal <<=  bitWidth | Src2.IntVal;
+      R.IntVal = concat.rotr(Src3.IntVal);
+    }
+    SetValue(&I, R, SF);
+    ++SF.CurInst;
+    return;
+  }
+
+
+
+  
   default: {
     BasicBlock::iterator Me(&I);
     BasicBlock *Parent = I.getParent();

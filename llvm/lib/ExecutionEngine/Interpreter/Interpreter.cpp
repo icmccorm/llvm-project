@@ -25,9 +25,9 @@ static struct RegisterInterp {
   RegisterInterp() { Interpreter::Register(); }
 } InterpRegistrator;
 
-}
+} // namespace
 
-extern "C" void LLVMLinkInInterpreter() { }
+extern "C" void LLVMLinkInInterpreter() {}
 
 /// Create a new interpreter object.
 ///
@@ -36,9 +36,8 @@ ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M,
   // Tell this Module to materialize everything and release the GVMaterializer.
   if (Error Err = M->materializeAll()) {
     std::string Msg;
-    handleAllErrors(std::move(Err), [&](ErrorInfoBase &EIB) {
-      Msg = EIB.message();
-    });
+    handleAllErrors(std::move(Err),
+                    [&](ErrorInfoBase &EIB) { Msg = EIB.message(); });
     if (ErrStr)
       *ErrStr = Msg;
     // We got an error, just return 0
@@ -53,33 +52,89 @@ ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M,
 //
 Interpreter::Interpreter(std::unique_ptr<Module> M)
     : ExecutionEngine(std::move(M)) {
-
-  memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
   // Initialize the "backend"
   initializeExecutionEngine();
-  initializeExternalFunctions();
-  emitGlobals();
+  // initializeExternalFunctions();
 
   IL = new IntrinsicLowering(getDataLayout());
 }
 
-Interpreter::~Interpreter() {
-  delete IL;
-}
+Interpreter::~Interpreter() { delete IL; }
 
-void Interpreter::runAtExitHandlers () {
+void Interpreter::runAtExitHandlers() {
   while (!AtExitHandlers.empty()) {
-    callFunction(AtExitHandlers.back(), std::nullopt);
+    callFunction(AtExitHandlers.back(), ArrayRef<GenericValue>());
     AtExitHandlers.pop_back();
     run();
   }
 }
 
-/// run - Start execution with the specified function and arguments.
-///
+void Interpreter::createThread(uint64_t NextThreadID, Function *F,
+                                        std::vector<GenericValue> Args) {
+  assert(F && "Function *F was null at entry to run()");
+  ArrayRef<GenericValue> ArgsRef =
+      Interpreter::createThreadContext(NextThreadID, Args);
+  uint64_t PrevThread = Interpreter::switchThread(NextThreadID);
+  const size_t ArgCount = F->getFunctionType()->getNumParams();
+  ArrayRef<GenericValue> ActualArgs =
+      ArgsRef.slice(0, std::min(ArgsRef.size(), ArgCount));
+  // Set up the function call.
+  callFunction(F, ActualArgs);
+  Interpreter::switchThread(PrevThread);
+}
+
+bool Interpreter::stepThread(uint64_t ThreadID,
+                             GenericValue *PendingReturnValue) {
+  Interpreter::switchThread(ThreadID);
+  // Interpret a single instruction & increment the "PC".
+  ExecutionContext &CallingSF = Interpreter::context();
+
+  if (CallingSF.MustResolvePendingReturn) {
+    CallingSF.MustResolvePendingReturn = false;
+    if (PendingReturnValue == nullptr) {
+      llvm_unreachable("Expected to receive a return value, but pending return "
+                       "value is null");
+    }
+    Instruction &I = *(std::prev(CallingSF.CurInst));
+    CallBase &Caller = static_cast<CallBase &>(I);
+    GenericValue Result = *PendingReturnValue;
+    if (!Caller.getType()->isVoidTy())
+      CallingSF.Values[(Value *)&Caller] = Result;
+    if (InvokeInst *II = dyn_cast<InvokeInst>(&Caller))
+      SwitchToNewBasicBlock(II->getNormalDest(), CallingSF);
+    CallingSF.Caller = nullptr; // We returned from the call...
+  } else {
+    if (PendingReturnValue == nullptr) {
+      llvm_unreachable("Unexpectedly received a pending return value.");
+    }
+  }
+  Instruction &I = *CallingSF.CurInst++; // Increment before execute
+
+  LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
+  visit(I); // Dispatch to one of the visit* methods...
+
+  return Interpreter::stackIsEmpty();
+}
+
+GenericValue *Interpreter::getThreadExitValueByID(uint64_t ThreadID) {
+  if (!Interpreter::hasThread(ThreadID)) {
+    return nullptr;
+  } else {
+    return &Interpreter::getThread(ThreadID)->ExitValue;
+  }
+}
+
+void Interpreter::terminateThread(uint64_t ThreadID) {
+  Threads.erase(ThreadID);
+}
+
+bool Interpreter::hasThread(uint64_t ThreadID) {
+  return Threads.find(ThreadID) != Threads.end();
+}
+
 GenericValue Interpreter::runFunction(Function *F,
                                       ArrayRef<GenericValue> ArgValues) {
-  assert (F && "Function *F was null at entry to run()");
+  assert(F && "Function *F was null at entry to run()");
 
   // Try extra hard not to pass extra args to a function that isn't
   // expecting them.  C programmers frequently bend the rules and
@@ -98,5 +153,37 @@ GenericValue Interpreter::runFunction(Function *F,
   // Start executing the function.
   run();
 
-  return ExitValue;
+  return *Interpreter::getThreadExitValue();
+}
+
+void Interpreter::registerMiriErrorWithoutLocation() {
+  ExecutionEngine::setMiriErrorFlag();
+  ExecutionThread *CurrentPath = Interpreter::getCurrentThread();
+  for (ExecutionContext &CurrContext : CurrentPath->ECStack) {
+    if (CurrContext.Caller) {
+      DILocation *Loc = CurrContext.Caller->getDebugLoc();
+      if (Loc) {
+        StringRef ErrorFile = Loc->getFilename();
+        StringRef ErrorDir = Loc->getDirectory();
+        StackTrace.push_back(MiriErrorTrace{ErrorDir.data(), ErrorDir.size(),
+                                            ErrorFile.data(), ErrorFile.size(),
+                                            Loc->getLine(), Loc->getColumn()});
+      }
+    }
+    if (Interpreter::miriIsInitialized()) {
+      this->MiriStackTraceRecorder(this->MiriWrapper, StackTrace.data(),
+                                   StackTrace.size());
+    }
+  }
+}
+void Interpreter::registerMiriError(Instruction &I) {
+  DILocation *Loc = I.getDebugLoc();
+  if (Loc) {
+    StringRef ErrorFile = Loc->getFilename();
+    StringRef ErrorDir = Loc->getDirectory();
+    StackTrace.push_back(MiriErrorTrace{ErrorDir.data(), ErrorDir.size(),
+                                        ErrorFile.data(), ErrorFile.size(),
+                                        Loc->getLine(), Loc->getColumn()});
+  }
+  Interpreter::registerMiriErrorWithoutLocation();
 }

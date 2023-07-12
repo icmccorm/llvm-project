@@ -21,13 +21,13 @@
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include <unordered_map>
 namespace llvm {
 
 class IntrinsicLowering;
-template<typename T> class generic_gep_type_iterator;
+template <typename T> class generic_gep_type_iterator;
 class ConstantExpr;
 typedef generic_gep_type_iterator<User::const_op_iterator> gep_type_iterator;
-
 
 // AllocaHolder - Object to track all of the blocks of memory allocated by
 // alloca.  When the function returns, this object is popped off the execution
@@ -51,37 +51,84 @@ public:
   void add(void *Mem) { Allocations.push_back(Mem); }
 };
 
+class MiriAllocaHolder {
+  std::vector<MiriPointer> MiriAllocations;
+  MiriFreeHook MiriFree;
+  void *MiriWrapper;
+
+public:
+  MiriAllocaHolder(void *Wrapper, MiriFreeHook Free) {
+    MiriWrapper = Wrapper;
+    MiriFree = Free;
+  }
+  // Make this type move-only.
+  MiriAllocaHolder(MiriAllocaHolder &&) = default;
+  MiriAllocaHolder &operator=(MiriAllocaHolder &&RHS) = default;
+
+  ~MiriAllocaHolder() {
+    for (MiriPointer Tracked : MiriAllocations)
+      MiriFree(MiriWrapper, Tracked);
+  }
+
+  void add(MiriPointer Tracked) { MiriAllocations.push_back(Tracked); }
+};
+
 typedef std::vector<GenericValue> ValuePlaneTy;
 
 // ExecutionContext struct - This struct represents one stack frame currently
 // executing.
 //
 struct ExecutionContext {
-  Function             *CurFunction;// The currently executing function
-  BasicBlock           *CurBB;      // The currently executing BB
-  BasicBlock::iterator  CurInst;    // The next instruction to execute
-  CallBase             *Caller;     // Holds the call that called subframes.
-                                    // NULL if main func or debugger invoked fn
+  // Make this type move-only.
+  ExecutionContext(ExecutionContext &&) = default;
+  ExecutionContext &operator=(ExecutionContext &&RHS) = default;
+  Function *CurFunction;        // The currently executing function
+  BasicBlock *CurBB;            // The currently executing BB
+  BasicBlock::iterator CurInst; // The next instruction to execute
+  CallBase *Caller;             // Holds the call that called subframes.
+  bool MustResolvePendingReturn;
+  GenericValue AwaitingReturn; // If non-null, the return value of the call into
+                               // Rust NULL if main func or debugger invoked fn
   std::map<Value *, GenericValue> Values; // LLVM values used in this invocation
-  std::vector<GenericValue>  VarArgs; // Values passed through an ellipsis
-  AllocaHolder Allocas;            // Track memory allocated by alloca
+  std::vector<GenericValue> VarArgs;      // Values passed through an ellipsis
+  AllocaHolder Allocas;                   // Track memory allocated by alloca
+  MiriAllocaHolder MiriAllocas;
+  ExecutionContext(void *Wrapper, MiriFreeHook MiriFree)
+      : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr), Caller(nullptr),
+        MustResolvePendingReturn(false), AwaitingReturn(GenericValue(0)),
+        MiriAllocas(Wrapper, MiriFree) {}
+};
 
-  ExecutionContext() : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr) {}
+class ExecutionThread {
+
+public:
+  // The runtime stack of executing code.  The top of the stack is the current
+  // function record.
+  std::vector<ExecutionContext> ECStack;
+  GenericValue ExitValue; // The return value of the called function
+  Type *DelayedReturn;
+  std::vector<GenericValue> InitArgs;
+  ExecutionThread() : DelayedReturn(nullptr) {
+    memset(&ExitValue.Untyped, 0, sizeof(ExitValue.Untyped));
+  }
+  uint64_t ThreadID;
+  // Make this type move-only.
+  ExecutionThread(ExecutionThread &&) = default;
+  ExecutionThread &operator=(ExecutionThread &&RHS) = default;
 };
 
 // Interpreter - This class represents the entirety of the interpreter.
 //
 class Interpreter : public ExecutionEngine, public InstVisitor<Interpreter> {
-  GenericValue ExitValue;          // The return value of the called function
   IntrinsicLowering *IL;
-
-  // The runtime stack of executing code.  The top of the stack is the current
-  // function record.
-  std::vector<ExecutionContext> ECStack;
 
   // AtExitHandlers - List of functions to call when the program exits,
   // registered with the atexit() library function.
-  std::vector<Function*> AtExitHandlers;
+  std::vector<Function *> AtExitHandlers;
+  std::vector<MiriErrorTrace> StackTrace;
+
+  std::unordered_map<uint64_t, ExecutionThread> Threads;
+  uint64_t CurrentThreadID;
 
 public:
   explicit Interpreter(std::unique_ptr<Module> M);
@@ -92,9 +139,7 @@ public:
   ///
   void runAtExitHandlers();
 
-  static void Register() {
-    InterpCtor = create;
-  }
+  static void Register() { InterpCtor = create; }
 
   /// Create an interpreter ExecutionEngine.
   ///
@@ -112,10 +157,92 @@ public:
     return nullptr;
   }
 
+  ExecutionContext *callingContext() {
+    if (getCurrentThread()->ECStack.size() < 2) {
+      return nullptr;
+    } else {
+      return &getCurrentThread()
+                  ->ECStack[getCurrentThread()->ECStack.size() - 2];
+    }
+  }
+
+  ExecutionContext &context() {
+    if (getCurrentThread()->ECStack.empty()) {
+      llvm_unreachable("Empty stack");
+    } else {
+      return getCurrentThread()->ECStack.back();
+    }
+  }
+
+  GenericValue *getThreadExitValue() { return &getCurrentThread()->ExitValue; }
+
+  void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
+
+  ArrayRef<GenericValue> createThreadContext(uint64_t ThreadID,
+                                             std::vector<GenericValue> Args) {
+    Threads[ThreadID] = ExecutionThread();
+    Threads[ThreadID].InitArgs = Args;
+    return Threads[ThreadID].InitArgs;
+  }
+
+  uint64_t switchThread(uint64_t ThreadID) {
+    uint64_t OldThreadID = CurrentThreadID;
+    CurrentThreadID = ThreadID;
+    return OldThreadID;
+  }
+
+  ExecutionThread *getCurrentThread() {
+    ExecutionThread *CurrThread = getThread(CurrentThreadID);
+    if (CurrThread == nullptr) {
+      llvm_unreachable("Current thread not found");
+    } else {
+      return CurrThread;
+    }
+  }
+
+  GenericValue getPendingReturnValue() {
+    if (getCurrentThread()->ECStack.size() == 0) {
+      llvm_unreachable("Cannot resolve pending return value; stack is empty.");
+    }
+    return getCurrentThread()->ECStack.back().AwaitingReturn;
+  }
+
+  ExecutionThread *getThread(uint64_t ThreadID) {
+    auto it = Threads.find(ThreadID);
+    if (it == Threads.end())
+      return nullptr;
+    return &it->second;
+  }
+
+  void registerMiriErrorWithoutLocation();
+
+  void registerMiriError(Instruction &I);
+
+  void popContext() { Interpreter::getCurrentThread()->ECStack.pop_back(); }
+
+  std::vector<ExecutionContext> &currentStack() {
+    return getCurrentThread()->ECStack;
+  }
+
+  bool atStackBottom() { return getCurrentThread()->ECStack.size() == 1; }
+
+  bool stackIsEmpty() { return getCurrentThread()->ECStack.empty(); }
+
+  size_t stackSize() { return getCurrentThread()->ECStack.size(); }
+
+  void clearStack() { getCurrentThread()->ECStack.clear(); }
+
   // Methods used to execute code:
   // Place a call on the stack
   void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
-  void run();                // Execute instructions until nothing left to do
+  void run(); // Execute instructions until nothing left to do
+  void createThread(uint64_t NextThreadID, Function *F,
+                    std::vector<GenericValue> Args) override;
+  bool stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue)
+      override; // Execute a single instruction
+  GenericValue *getThreadExitValueByID(uint64_t ThreadID) override;
+  bool hasThread(uint64_t ThreadID) override;
+  void terminateThread(uint64_t ThreadID) override;
 
   // Opcode Implementations
   void visitReturnInst(ReturnInst &I);
@@ -172,19 +299,22 @@ public:
     llvm_unreachable("Instruction not interpretable yet!");
   }
 
-  GenericValue callExternalFunction(Function *F,
-                                    ArrayRef<GenericValue> ArgVals);
+  GenericValue *resolveReturnPlaceLocation(ExecutionContext *CallingContext,
+                                           Type *RetTy);
+
+  void callExternalFunction(Function *F, ArrayRef<GenericValue> ArgVals);
+
+  void CallMiriFunctionByName(Function *F, ArrayRef<GenericValue> ArgVals);
+  void CallMiriFunctionByPointer(FunctionType *FType, GenericValue FuncPtr,
+                                 ArrayRef<GenericValue> ArgVals);
+
   void exitCalled(GenericValue GV);
 
-  void addAtExitHandler(Function *F) {
-    AtExitHandlers.push_back(F);
-  }
+  void addAtExitHandler(Function *F) { AtExitHandlers.push_back(F); }
 
-  GenericValue *getFirstVarArg () {
-    return &(ECStack.back ().VarArgs[0]);
-  }
+  GenericValue *getFirstVarArg() { return &(this->context().VarArgs[0]); }
 
-private:  // Helper functions
+private: // Helper functions
   GenericValue executeGEPOperation(Value *Ptr, gep_type_iterator I,
                                    gep_type_iterator E, ExecutionContext &SF);
 
@@ -194,10 +324,10 @@ private:  // Helper functions
   //
   void SwitchToNewBasicBlock(BasicBlock *Dest, ExecutionContext &SF);
 
-  void *getPointerToFunction(Function *F) override { return (void*)F; }
+  void *getPointerToFunction(Function *F) override { return (void *)F; }
 
-  void initializeExecutionEngine() { }
-  void initializeExternalFunctions();
+  void initializeExecutionEngine() {}
+  // void initializeExternalFunctions();
   GenericValue getConstantExprValue(ConstantExpr *CE, ExecutionContext &SF);
   GenericValue getOperandValue(Value *V, ExecutionContext &SF);
   GenericValue executeTruncInst(Value *SrcVal, Type *DstTy,
@@ -228,8 +358,11 @@ private:  // Helper functions
                                     Type *Ty, ExecutionContext &SF);
   void popStackAndReturnValueToCaller(Type *RetTy, GenericValue Result);
 
+  void enterLowerStackFrame(Type *RetTy);
+
+  void passReturnValueToLowerStackFrame(Type *RetTy, GenericValue Result);
 };
 
-} // End llvm namespace
+} // namespace llvm
 
 #endif

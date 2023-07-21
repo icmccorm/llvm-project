@@ -15,6 +15,9 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
+#include <iostream>
+
+using namespace std;
 
 namespace llvm {
 
@@ -116,11 +119,12 @@ public:
     static_assert(std::is_base_of<InstVisitor, SubClass>::value,
                   "Must pass the derived type to this template!");
     //print the instruction
-    //std::string output;
-    //llvm::raw_string_ostream stream(output);
-    //I.print(stream);
-    //cout << "I: " << stream.str() << 
-
+    /*
+    std::string output;
+    llvm::raw_string_ostream stream(output);
+    I.print(stream);
+    cout << "I: " << stream.str() << endl;
+    */
     switch (I.getOpcode()) {
     default: llvm_unreachable("Unknown instruction type encountered!");
       // Build the switch statement using the Instruction.def file...

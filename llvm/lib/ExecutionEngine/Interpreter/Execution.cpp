@@ -1321,7 +1321,7 @@ static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type* Ty) {
         Dest.IntVal = Src1.IntVal.abs();
         break;
       default:
-        report_fatal_error("Fmulladd intrinsic");
+        report_fatal_error("Fabs intrinsic only supports float, double, or int");
   }
 
   return Dest;
@@ -1339,7 +1339,7 @@ static GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue 
       break;
           Dest.DoubleVal = Src1.DoubleVal * Src2.DoubleVal + Src3.DoubleVal;
     default:
-      report_fatal_error("Fmulladd intrinsic");
+      report_fatal_error("Fmuladd intrinsic only supports float and double");
   }
 
   return Dest;
@@ -1495,7 +1495,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 }
 
 void Interpreter::visitCallBase(CallBase &I) {
-  if(I->isInlineAsm()) {
+  if(I.isInlineAsm()) {
     report_fatal_error("LLI does not support inline assembly.");
   }
   ExecutionContext &SF = Interpreter::context();
@@ -2528,7 +2528,7 @@ void Interpreter::callFunction(Function *F,
   ExecutionContext &StackFrame = Interpreter::context();
   StackFrame.CurFunction = F;
 
-  if(F->getFunctionType()->)
+  // if(F->getFunctionType()->)
   // Special handling for external functions.
   if (F->isDeclaration()) {
     callExternalFunction(F, ArgVals);

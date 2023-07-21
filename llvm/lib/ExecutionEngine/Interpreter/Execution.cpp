@@ -1422,6 +1422,9 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 }
 
 void Interpreter::visitCallBase(CallBase &I) {
+  if(I->isInlineAsm()) {
+    report_fatal_error("LLI does not support inline assembly.");
+  }
   ExecutionContext &SF = Interpreter::context();
   SF.Caller = &I;
   std::vector<GenericValue> ArgVals;
@@ -2444,12 +2447,15 @@ void Interpreter::callFunction(Function *F,
   assert((Interpreter::stackIsEmpty() || !Interpreter::context().Caller ||
           Interpreter::context().Caller->arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");
+
   // Make a new stack frame... and fill it in.
   Interpreter::currentStack().emplace_back(
       Interpreter::ExecutionEngine::MiriWrapper,
       Interpreter::ExecutionEngine::MiriFree);
   ExecutionContext &StackFrame = Interpreter::context();
   StackFrame.CurFunction = F;
+
+  if(F->getFunctionType()->)
   // Special handling for external functions.
   if (F->isDeclaration()) {
     callExternalFunction(F, ArgVals);

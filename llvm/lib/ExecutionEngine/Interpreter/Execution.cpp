@@ -1307,6 +1307,87 @@ void Interpreter::visitVACopyInst(VACopyInst &I) {
   ExecutionContext &SF = Interpreter::context();
   SetValue(&I, getOperandValue(*I.arg_begin(), SF), SF);
 }
+static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type* Ty) {
+  GenericValue Dest;
+
+    switch (Ty->getTypeID()) {
+      case Type::FloatTyID:
+        Dest.FloatVal = abs(Src1.FloatVal);
+        break;
+      case Type::DoubleTyID:
+        Dest.DoubleVal = fabs(Src1.DoubleVal);
+        break;
+      case Type::IntegerTyID:
+        Dest.IntVal = Src1.IntVal.abs();
+        break;
+      default:
+        report_fatal_error("Fmulladd intrinsic");
+  }
+
+  return Dest;
+}
+
+static GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
+                                                GenericValue Src3, Type* Ty) {
+  GenericValue Dest;
+  
+  switch (Ty->getTypeID()) {
+    case Type::FloatTyID:
+      Dest.FloatVal = Src1.FloatVal * Src2.FloatVal + Src3.FloatVal;
+      break;
+    case Type::DoubleTyID:
+      break;
+          Dest.DoubleVal = Src1.DoubleVal * Src2.DoubleVal + Src3.DoubleVal;
+    default:
+      report_fatal_error("Fmulladd intrinsic");
+  }
+
+  return Dest;
+}
+
+static GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
+                                                GenericValue Src3, bool isLeft) {
+  GenericValue Dest;
+
+  assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth());
+  assert(Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
+
+  unsigned bitWidth = Src1.IntVal.getBitWidth();
+  APInt concat = Src1.IntVal <<=  bitWidth | Src2.IntVal;
+
+  if (isLeft) {
+    Dest.IntVal = concat.rotl(Src3.IntVal);
+  } else {
+    Dest.IntVal = concat.rotr(Src3.IntVal);
+  }
+
+  return Dest;
+}
+
+static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue Src2,
+                                            GenericValue Src3, Type* Ty, bool isLeft) {
+  
+  GenericValue Dest;
+
+  /* the operands are vectors */
+  if (Ty->isVectorTy()) {
+    assert(Src1.AggregateVal.size() == Src2.AggregateVal.size());
+    assert(Src2.AggregateVal.size() == Src3.AggregateVal.size());
+
+    Dest.AggregateVal.resize(Src1.AggregateVal.size());
+    for (size_t i = 0; i < Src1.AggregateVal.size(); i++) {
+      /* Somehow we'd like to assert the inner type of this vector is an integer */
+      Dest.AggregateVal[i] = executeIntrinsicFshIntInst(Src1.AggregateVal[i], Src2.AggregateVal[i], 
+                                                        Src3.AggregateVal[i], isLeft);
+    }
+
+  } else {
+    assert(Ty->isIntegerTy());
+    Dest = executeIntrinsicFshIntInst(Src1, Src2, Src3, isLeft);
+  }
+
+  return Dest;
+}
 
 void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   ExecutionContext &SF = Interpreter::context();
@@ -1321,86 +1402,78 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
              getOperandValue(
                  lowerObjectSizeCall(&I, getDataLayout(), nullptr, true), SF),
              SF);
-  }
     return;
+  }
+    
   case Intrinsic::is_constant: {
     Value *Flag = ConstantInt::getFalse(I.getType());
     if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
       if (C->isManifestConstant())
         Flag = ConstantInt::getTrue(I.getType());
     SetValue(&I, getOperandValue(Flag, SF), SF);
-  }
     return;
-
-
-
+  }
   case Intrinsic::fmuladd: {
-    /* R = Src1 * Src2 + Src3 */
 
-    Type *Ty = I.getOperand(0)->getType();
+    Type *Ty1 = I.getOperand(0)->getType();
+    Type *Ty2 = I.getOperand(1)->getType();
+    Type *Ty3 = I.getOperand(2)->getType();
+
+    assert(Ty1->getTypeID() == Ty2->getTypeID());
+    assert(Ty2->getTypeID() == Ty3->getTypeID());
+
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
     GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
     GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
-    GenericValue R;
-
-    if (cast<VectorType>(Ty)->getElementType()->isFloatTy()) {
-      R.FloatVal = Src1.FloatVal * Src2.FloatVal + Src3.FloatVal;
-    }
-
-    if (cast<VectorType>(Ty)->getElementType()->isDoubleTy()) {
-      R.DoubleVal = Src1.DoubleVal * Src2.DoubleVal + Src3.DoubleVal;
-    }
+    GenericValue R = executeIntrinsicFmuladdInst(Src1, Src2, Src3, Ty1);
     SetValue(&I, R, SF);
     ++SF.CurInst;
     return;
   } 
 
   case Intrinsic::fshl: {
-    
-    /* R = ( Src1 concat Src2 ) rotateL Src3 */
-    /*   = ( Src1 concat Src2 ) << Src3 | (Src1 concat Src2 ) >> ( T - Src-3 ) */
+    Type *Ty1 = I.getOperand(0)->getType();
+    Type *Ty2 = I.getOperand(1)->getType();
+    Type *Ty3 = I.getOperand(2)->getType();
 
-    Type *Ty = I.getOperand(0)->getType();
+    assert(Ty1->getTypeID() == Ty2->getTypeID());
+    assert(Ty2->getTypeID() == Ty3->getTypeID());
+
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
     GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
     GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
-    GenericValue R;
-
-    if (cast<VectorType>(Ty)->getElementType()->isIntegerTy()) {
-      assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
-      unsigned bitWidth = Src1.IntVal.getBitWidth();
-      APInt concat = Src1.IntVal <<=  bitWidth | Src2.IntVal;
-      R.IntVal = concat.rotl(Src3.IntVal);
-    }
+    GenericValue R = executeIntrinsicFshInst(Src1, Src2, Src3, Ty1, true);
     SetValue(&I, R, SF);
     ++SF.CurInst;
     return;
   }
 
-    case Intrinsic::fshr: {
+  case Intrinsic::fshr: {
     
-    /* R = ( Src1 concat Src2 ) rotateR Src3 */
-    /*   = ( Src1 concat Src2 ) >> Src3 | (Src1 concat Src2 ) << ( T - Src-3 ) */
+    Type *Ty1 = I.getOperand(0)->getType();
+    Type *Ty2 = I.getOperand(1)->getType();
+    Type *Ty3 = I.getOperand(2)->getType();
 
-    Type *Ty = I.getOperand(0)->getType();
+    assert(Ty1->getTypeID() == Ty2->getTypeID());
+    assert(Ty2->getTypeID() == Ty3->getTypeID());
+
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
     GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
     GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
-    GenericValue R;
-
-    if (cast<VectorType>(Ty)->getElementType()->isIntegerTy()) {
-      assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
-      unsigned bitWidth = Src1.IntVal.getBitWidth();
-      APInt concat = Src1.IntVal <<=  bitWidth | Src2.IntVal;
-      R.IntVal = concat.rotr(Src3.IntVal);
-    }
+    GenericValue R = executeIntrinsicFshInst(Src1, Src2, Src3, Ty1, false);
     SetValue(&I, R, SF);
     ++SF.CurInst;
     return;
   }
 
-
-
+  case Intrinsic::fabs: {
+    Type *Ty = I.getOperand(0)->getType();
+    GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
+    GenericValue R = executeIntrinsicFabsInst(Src1, Ty);
+    SetValue(&I, R, SF);
+    ++SF.CurInst;
+    return;
+  }
   
   default: {
     BasicBlock::iterator Me(&I);

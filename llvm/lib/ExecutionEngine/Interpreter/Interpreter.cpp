@@ -146,7 +146,7 @@ GenericValue Interpreter::runFunction(Function *F,
   const size_t ArgCount = F->getFunctionType()->getNumParams();
   ArrayRef<GenericValue> ActualArgs =
       ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
-
+  
   // Set up the function call.
   callFunction(F, ActualArgs);
 

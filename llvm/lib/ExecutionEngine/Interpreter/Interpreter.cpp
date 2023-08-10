@@ -110,7 +110,6 @@ bool Interpreter::stepThread(uint64_t ThreadID,
   }
   Instruction &I = *CallingSF.CurInst++; // Increment before execute
 
-  LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
   visit(I); // Dispatch to one of the visit* methods...
 
   return Interpreter::stackIsEmpty();

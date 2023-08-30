@@ -295,8 +295,9 @@ public:
   void visitInsertValueInst(InsertValueInst &I);
 
   void visitInstruction(Instruction &I) {
-    errs() << I << "\n";
-    llvm_unreachable("Instruction not interpretable yet!");
+    std::string Message =
+        "Instruction not interpretable yet: " + std::string(I.getOpcodeName());
+    report_fatal_error(Message.data());
   }
 
   GenericValue *resolveReturnPlaceLocation(ExecutionContext *CallingContext,

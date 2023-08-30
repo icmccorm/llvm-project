@@ -35,7 +35,6 @@ struct GenericValue {
   };
   APInt IntVal; // also used for long doubles.
   MiriProvenance Provenance = {0, 0};
-  MiriProvenance ParentProvenance = {0, 0};
   std::vector<GenericValue> AggregateVal;
 
   // to make code faster, set GenericValue to zero could be omitted, but it is
@@ -50,8 +49,7 @@ struct GenericValue {
       : PointerVal((void *)(intptr_t)Meta.addr), IntVal(1, 0),
         Provenance(Meta.prov) {}
   explicit GenericValue(void *V)
-      : PointerVal(V), IntVal(1, 0), Provenance(NULL_PROVENANCE),
-        ParentProvenance(NULL_PROVENANCE) {}
+      : PointerVal(V), IntVal(1, 0), Provenance(NULL_PROVENANCE) {}
 };
 inline GenericValue MiriPointerTOGV(MiriPointer P) { return GenericValue(P); }
 inline GenericValue PTOGV(void *P) { return GenericValue(P); }

@@ -729,6 +729,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       cast<GEPOperator>(CE)->accumulateConstantOffset(DL, Offset);
 
       char *tmp = (char *)ConstResult.PointerVal;
+      
       GenericValue Result = PTOGV(tmp + Offset.getSExtValue());
       Result.Provenance = ConstResult.Provenance;
       return Result;
@@ -1035,7 +1036,6 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       llvm_unreachable("Unknown constant pointer type!");
     }
     break;
-
   case Type::ScalableVectorTyID:
     report_fatal_error(
         "Scalable vector support not yet implemented in ExecutionEngine");

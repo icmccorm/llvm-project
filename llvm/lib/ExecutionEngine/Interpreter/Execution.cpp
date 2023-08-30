@@ -1250,7 +1250,6 @@ void Interpreter::visitLoadInst(LoadInst &I) {
       Interpreter::registerMiriError(I);
       return;
     }
-    Result.ParentProvenance = SRC.Provenance;
   } else {
     report_fatal_error("Miri isn't initialized.");
   }
@@ -2324,11 +2323,11 @@ void Interpreter::visitExtractValueInst(ExtractValueInst &I) {
   case Type::ScalableVectorTyID:
     Dest.AggregateVal = pSrc->AggregateVal;
     break;
-  case Type::PointerTyID:
+  case Type::PointerTyID: {
     Dest.PointerVal = pSrc->PointerVal;
-    break;
+    Dest.Provenance = pSrc->Provenance;
+  }  break;
   }
-  Dest.Provenance = pSrc->Provenance;
   SetValue(&I, Dest, SF);
 }
 
@@ -2373,11 +2372,11 @@ void Interpreter::visitInsertValueInst(InsertValueInst &I) {
   case Type::ScalableVectorTyID:
     pDest->AggregateVal = Src2.AggregateVal;
     break;
-  case Type::PointerTyID:
+  case Type::PointerTyID: {
     pDest->PointerVal = Src2.PointerVal;
-    break;
+    pDest->Provenance = Src2.Provenance;
+  } break;
   }
-  pDest->Provenance = Src2.Provenance;
   SetValue(&I, Dest, SF);
 }
 

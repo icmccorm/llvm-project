@@ -154,10 +154,6 @@ double LLVMGenericValueToFloat(LLVMTypeRef TyRef, LLVMGenericValueRef GenVal) {
     llvm_unreachable("LLVMGenericValueToFloat supports only float and double.");
   }
 }
-void LLVMGenericValueSetMiriParentPointerValue(LLVMGenericValueRef GenVal,
-                                               MiriPointer PointerMetaVal) {
-  unwrap(GenVal)->ParentProvenance = PointerMetaVal.prov;
-}
 
 void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
                                          MiriPointer PointerMetaVal) {

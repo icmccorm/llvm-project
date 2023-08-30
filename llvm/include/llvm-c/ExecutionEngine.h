@@ -95,8 +95,7 @@ void LLVMGenericValueSetIntValue(LLVMGenericValueRef GenVal, uint64_t val,
 
 void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
                                          MiriPointer Ptr);
-void LLVMGenericValueSetMiriParentPointerValue(LLVMGenericValueRef GenVal,
-                                               MiriPointer PointerMetaVal);
+
 LLVMGenericValueRef
 LLVMGetPointerToAggregateGenericValue(LLVMGenericValueRef GenValRef,
                                       uint64_t Index);
@@ -394,8 +393,7 @@ void LLVMGenericValueSetIntValue(LLVMGenericValueRef GenVal, uint64_t val,
 
 void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
                                          MiriPointer Ptr);
-void LLVMGenericValueSetMiriParentPointerValue(LLVMGenericValueRef GenVal,
-                                               MiriPointer PointerMetaVal);
+
 LLVMGenericValueRef
 LLVMGetPointerToAggregateGenericValue(LLVMGenericValueRef GenValRef,
                                       uint64_t Index);

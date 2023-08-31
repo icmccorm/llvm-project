@@ -33,6 +33,11 @@ typedef struct MiriPointer {
   MiriProvenance prov;
 } MiriPointer;
 
+typedef struct APIntPointer {
+  const uint64_t * data;
+  uint8_t words;
+} APIntPointer;
+
 const MiriProvenance NULL_PROVENANCE = {0, 0};
 typedef struct MiriErrorTrace {
   const char *directory;
@@ -61,6 +66,5 @@ typedef bool (*MiriCallByPointerHook)(void *, MiriPointer,
                                       LLVMGenericValueArrayRef, LLVMTypeRef);
 typedef bool (*MiriRegisterGlobalHook)(void *, const char *, uint64_t,
                                        MiriPointer);
-
 LLVM_C_EXTERN_C_END
 #endif // LLVM_C_MIRI_H

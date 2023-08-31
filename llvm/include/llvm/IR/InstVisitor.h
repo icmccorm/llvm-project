@@ -115,7 +115,8 @@ public:
     static_assert(std::is_base_of<InstVisitor, SubClass>::value,
                   "Must pass the derived type to this template!");
     // print the instruction
-    /* std::string output;
+    /*
+    std::string output;
     llvm::raw_string_ostream stream(output);
     I.print(stream);
     cout << "I: " << stream.str() << endl;

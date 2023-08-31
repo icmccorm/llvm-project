@@ -131,13 +131,12 @@ unsigned LLVMGenericValueIntWidth(LLVMGenericValueRef GenValRef) {
   return unwrap(GenValRef)->IntVal.getBitWidth();
 }
 
-unsigned long long LLVMGenericValueToInt(LLVMGenericValueRef GenValRef,
-                                         LLVMBool IsSigned) {
-  GenericValue *GenVal = unwrap(GenValRef);
-  if (IsSigned)
-    return GenVal->IntVal.getSExtValue();
-  else
-    return GenVal->IntVal.getZExtValue();
+APIntPointer LLVMGenericValueToInt(LLVMGenericValueRef GenVal) {
+  GenericValue *GenValInner = unwrap(GenVal);
+  APIntPointer IntPointer;
+  IntPointer.data = GenValInner->IntVal.getRawData();
+  IntPointer.words = GenValInner->IntVal.getNumWords();
+  return IntPointer;
 }
 
 void *LLVMGenericValueToPointer(LLVMGenericValueRef GenVal) {
@@ -170,10 +169,15 @@ void LLVMGenericValueSetFloatValue(LLVMGenericValueRef GenVal, float FloatVal) {
 
   unwrap(GenVal)->FloatVal = FloatVal;
 }
-void LLVMGenericValueSetIntValue(LLVMGenericValueRef GenVal, uint64_t val,
-                                 unsigned LoadBytes) {
+void LLVMGenericValueSetIntValue(LLVMGenericValueRef GenVal, uint64_t *Data,
+                                 uint64_t Bytes) {
   GenericValue *GenValInner = unwrap(GenVal);
-  GenValInner->IntVal = APInt(LoadBytes * 8, val);
+  if (Bytes == 0) {
+    GenValInner->IntVal = APInt();
+  } else {
+    uint64_t NumWords = (Bytes + 7) / 8;
+    GenValInner->IntVal = APInt(8 * Bytes, ArrayRef<uint64_t>(Data, NumWords));
+  }
 }
 
 void LLVMDisposeGenericValue(LLVMGenericValueRef GenVal) {

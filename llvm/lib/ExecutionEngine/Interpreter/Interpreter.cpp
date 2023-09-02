@@ -158,21 +158,24 @@ GenericValue Interpreter::runFunction(Function *F,
 void Interpreter::registerMiriErrorWithoutLocation() {
   ExecutionEngine::setMiriErrorFlag();
   ExecutionThread *CurrentPath = Interpreter::getCurrentThread();
+  std::vector<MiriErrorTrace> CallStackTrace;
   for (ExecutionContext &CurrContext : CurrentPath->ECStack) {
     if (CurrContext.Caller) {
       DILocation *Loc = CurrContext.Caller->getDebugLoc();
       if (Loc) {
         StringRef ErrorFile = Loc->getFilename();
         StringRef ErrorDir = Loc->getDirectory();
-        StackTrace.push_back(MiriErrorTrace{ErrorDir.data(), ErrorDir.size(),
+        CallStackTrace.push_back(MiriErrorTrace{ErrorDir.data(), ErrorDir.size(),
                                             ErrorFile.data(), ErrorFile.size(),
                                             Loc->getLine(), Loc->getColumn()});
       }
     }
-    if (Interpreter::miriIsInitialized()) {
-      this->MiriStackTraceRecorder(this->MiriWrapper, StackTrace.data(),
-                                   StackTrace.size());
-    }
+  }
+  StackTrace.insert(StackTrace.begin(), CallStackTrace.begin(),
+                    CallStackTrace.end());
+  if (Interpreter::miriIsInitialized()) {
+    this->MiriStackTraceRecorder(this->MiriWrapper, StackTrace.data(),
+                                  StackTrace.size());
   }
 }
 void Interpreter::registerMiriError(Instruction &I) {

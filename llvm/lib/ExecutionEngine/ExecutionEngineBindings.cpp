@@ -102,6 +102,18 @@ LLVMGenericValueRef LLVMCreateGenericValueOfFloat(LLVMTypeRef TyRef, double N) {
   return wrap(GenVal);
 }
 
+LLVMGenericValueRef LLVMCreateGenericValueOfFloatSingle(float N) {
+  GenericValue *GenVal = new GenericValue();
+  GenVal->FloatVal = N;
+  return wrap(GenVal);
+}
+
+LLVMGenericValueRef LLVMCreateGenericValueOfFloatDouble(double N) {
+  GenericValue *GenVal = new GenericValue();
+  GenVal->DoubleVal = N;
+  return wrap(GenVal);
+}
+
 LLVMGenericValueRef LLVMCreateGenericValueOfData(const uint8_t *Data,
                                                  uint32_t Len) {
   GenericValue *GenVal = new GenericValue();

@@ -114,7 +114,7 @@ bool Interpreter::stepThread(uint64_t ThreadID,
 
   return Interpreter::stackIsEmpty();
 }
-
+ 
 GenericValue *Interpreter::getThreadExitValueByID(uint64_t ThreadID) {
   if (!Interpreter::hasThread(ThreadID)) {
     return nullptr;

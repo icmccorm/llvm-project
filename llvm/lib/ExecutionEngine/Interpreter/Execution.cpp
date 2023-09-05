@@ -1310,41 +1310,50 @@ static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type* Ty) {
   GenericValue Dest;
 
     switch (Ty->getTypeID()) {
-      case Type::FloatTyID:
-        Dest.FloatVal = abs(Src1.FloatVal);
-        break;
-      case Type::DoubleTyID:
-        Dest.DoubleVal = fabs(Src1.DoubleVal);
-        break;
+      case Type::FloatTyID: {
+        APFloat APVal = APFloat(Src1.FloatVal);
+        APVal.clearSign();
+        Dest.FloatVal = APVal.convertToFloat();
+      } break;
+      case Type::DoubleTyID: {
+        APFloat APVal = APFloat(Src1.DoubleVal);
+        APVal.clearSign();
+        Dest.DoubleVal = APVal.convertToDouble();
+      }  break;
       case Type::IntegerTyID:
         Dest.IntVal = Src1.IntVal.abs();
         break;
       default:
-        report_fatal_error("Fabs intrinsic only supports float, double, or int");
+        report_fatal_error("fabs intrinsic only supports float, double, or int");
   }
 
   return Dest;
 }
 
-static GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
+GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
                                                 GenericValue Src3, Type* Ty) {
   GenericValue Dest;
-  
   switch (Ty->getTypeID()) {
-    case Type::FloatTyID:
-      Dest.FloatVal = Src1.FloatVal * Src2.FloatVal + Src3.FloatVal;
-      break;
-    case Type::DoubleTyID:
-      break;
-          Dest.DoubleVal = Src1.DoubleVal * Src2.DoubleVal + Src3.DoubleVal;
-    default:
-      report_fatal_error("Fmuladd intrinsic only supports float and double");
+    case Type::FloatTyID: {
+      float FSrc1 = Src1.FloatVal;
+      float FSrc2 = Src2.FloatVal;
+      float FSrc3 = Src3.FloatVal;
+      Dest.FloatVal = FSrc1 * FSrc2 + FSrc3;
+    } break;
+    case Type::DoubleTyID: {
+      double FSrc1 = Src1.DoubleVal;
+      double FSrc2 = Src2.DoubleVal;
+      double FSrc3 = Src3.DoubleVal;
+      Dest.DoubleVal = FSrc1 * FSrc2 + FSrc3;
+    } break;
+    default: {
+      report_fatal_error("fmuladd intrinsic only supports float and double");
+    }
   }
-
   return Dest;
 }
-
-static GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
+/*
+GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
                                                 GenericValue Src3, bool isLeft) {
   GenericValue Dest;
 
@@ -1368,14 +1377,14 @@ static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue Src2
   
   GenericValue Dest;
 
-  /* the operands are vectors */
+  // the operands are vectors
   if (Ty->isVectorTy()) {
     assert(Src1.AggregateVal.size() == Src2.AggregateVal.size());
     assert(Src2.AggregateVal.size() == Src3.AggregateVal.size());
 
     Dest.AggregateVal.resize(Src1.AggregateVal.size());
     for (size_t i = 0; i < Src1.AggregateVal.size(); i++) {
-      /* Somehow we'd like to assert the inner type of this vector is an integer */
+      // Somehow we'd like to assert the inner type of this vector is an integer
       Dest.AggregateVal[i] = executeIntrinsicFshIntInst(Src1.AggregateVal[i], Src2.AggregateVal[i], 
                                                         Src3.AggregateVal[i], isLeft);
     }
@@ -1387,7 +1396,7 @@ static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue Src2
 
   return Dest;
 }
-
+*/
 void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   ExecutionContext &SF = Interpreter::context();
 
@@ -1412,8 +1421,8 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     SetValue(&I, getOperandValue(Flag, SF), SF);
     return;
   }
-  case Intrinsic::fmuladd: {
 
+  case Intrinsic::fmuladd: {
     Type *Ty1 = I.getOperand(0)->getType();
     Type *Ty2 = I.getOperand(1)->getType();
     Type *Ty3 = I.getOperand(2)->getType();
@@ -1424,12 +1433,12 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
     GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
     GenericValue Src3 = getOperandValue(I.getOperand(2), SF);
+
     GenericValue R = executeIntrinsicFmuladdInst(Src1, Src2, Src3, Ty1);
     SetValue(&I, R, SF);
-    ++SF.CurInst;
     return;
   } 
-
+  /*
   case Intrinsic::fshl: {
     Type *Ty1 = I.getOperand(0)->getType();
     Type *Ty2 = I.getOperand(1)->getType();
@@ -1446,7 +1455,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     ++SF.CurInst;
     return;
   }
-
+  
   case Intrinsic::fshr: {
     
     Type *Ty1 = I.getOperand(0)->getType();
@@ -1464,7 +1473,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     ++SF.CurInst;
     return;
   }
-
+*/
   case Intrinsic::fabs: {
     Type *Ty = I.getOperand(0)->getType();
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
@@ -1473,7 +1482,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     ++SF.CurInst;
     return;
   }
-  
+
   default: {
     BasicBlock::iterator Me(&I);
     BasicBlock *Parent = I.getParent();
@@ -2565,6 +2574,7 @@ void Interpreter::run() {
     ++NumDynamicInsts;
 
     LLVM_DEBUG(dbgs() << "About to interpret: " << I << "\n");
+
     visit(I); // Dispatch to one of the visit* methods...
     if (ExecutionEngine::getMiriErrorFlag()) {
       // Error occurred, stop execution.

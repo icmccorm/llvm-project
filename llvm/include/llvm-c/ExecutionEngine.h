@@ -70,6 +70,10 @@ LLVMGenericValueRef LLVMCreateGenericValueOfMiriPointer(MiriPointer Prov);
 
 LLVMGenericValueRef LLVMCreateGenericValueOfFloat(LLVMTypeRef Ty, double N);
 
+LLVMGenericValueRef LLVMCreateGenericValueOfFloatSingle(float N);
+
+LLVMGenericValueRef LLVMCreateGenericValueOfFloatDouble(double N);
+
 unsigned LLVMGenericValueIntWidth(LLVMGenericValueRef GenValRef);
 
 void *LLVMGenericValueToPointer(LLVMGenericValueRef GenVal);

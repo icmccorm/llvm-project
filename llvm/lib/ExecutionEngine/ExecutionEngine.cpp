@@ -1027,13 +1027,17 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       Result.PointerVal = nullptr;
     } else if (const Function *F = dyn_cast<Function>(C)) {
       Result = PTOGV(getPointerToFunctionOrStub(const_cast<Function *>(F)));
+    } else if (isa<GlobalIFunc>(C)) {
+      report_fatal_error("Constant global indirect functions are not supported.");
+    } else if (isa<BlockAddress>(C)){
+      report_fatal_error("Constant pointers to basic blocks are not supported.");
     } else if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(C)) {
       void *Addr = getOrEmitGlobalVariable(const_cast<GlobalVariable *>(GV));
       MiriProvenance Prov = getProvenanceOfGlobalIfAvailable(Addr);
       MiriPointer Ptr = {(uint64_t)Addr, Prov};
       Result = MiriPointerTOGV(Ptr);
     } else {
-      llvm_unreachable("Unknown constant pointer type!");
+      report_fatal_error("Unknown constant pointer type.");
     }
     break;
   case Type::ScalableVectorTyID:

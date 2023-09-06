@@ -47,6 +47,20 @@ static void SetValue(Value *V, GenericValue Val, ExecutionContext &SF) {
   SF.Values[V] = Val;
 }
 
+static std::string type_to_string(Type *Ty) {
+  std::string TypeString;
+  llvm::raw_string_ostream TypeStream(TypeString);
+  Ty->print(TypeStream);
+  return TypeString;
+}
+
+static std::string inst_to_string(Instruction *I) {
+  std::string InstString;
+  llvm::raw_string_ostream InstStream(InstString);
+  I->print(InstStream);
+  return InstString;
+}
+
 //===----------------------------------------------------------------------===//
 //                    Unary Instruction Implementations
 //===----------------------------------------------------------------------===//
@@ -60,7 +74,9 @@ static void executeFNegInst(GenericValue &Dest, GenericValue Src, Type *Ty) {
     Dest.DoubleVal = -Src.DoubleVal;
     break;
   default:
-    llvm_unreachable("Unhandled type for FNeg instruction");
+    std::string Message =
+        "Unhandled type for ICMP_UGT predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 }
 
@@ -76,7 +92,7 @@ void Interpreter::visitUnaryOperator(UnaryOperator &I) {
 
     switch (I.getOpcode()) {
     default:
-      llvm_unreachable("Don't know how to handle this unary operator");
+      report_fatal_error("Invalid unary operator");
       break;
     case Instruction::FNeg:
       if (cast<VectorType>(Ty)->getElementType()->isFloatTy()) {
@@ -86,14 +102,16 @@ void Interpreter::visitUnaryOperator(UnaryOperator &I) {
         for (unsigned i = 0; i < R.AggregateVal.size(); ++i)
           R.AggregateVal[i].DoubleVal = -Src.AggregateVal[i].DoubleVal;
       } else {
-        llvm_unreachable("Unhandled type for FNeg instruction");
+        std::string Message =
+            "Unhandled type for Fneg instruction: " + type_to_string(Ty);
+        report_fatal_error(Message.c_str());
       }
       break;
     }
   } else {
     switch (I.getOpcode()) {
     default:
-      llvm_unreachable("Don't know how to handle this unary operator");
+      report_fatal_error("Invalid unary operator");
       break;
     case Instruction::FNeg:
       executeFNegInst(R, Src, Ty);
@@ -118,8 +136,9 @@ static void executeFAddInst(GenericValue &Dest, GenericValue Src1,
     IMPLEMENT_BINARY_OPERATOR(+, Float);
     IMPLEMENT_BINARY_OPERATOR(+, Double);
   default:
-    dbgs() << "Unhandled type for FAdd instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FAdd predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 }
 
@@ -129,8 +148,9 @@ static void executeFSubInst(GenericValue &Dest, GenericValue Src1,
     IMPLEMENT_BINARY_OPERATOR(-, Float);
     IMPLEMENT_BINARY_OPERATOR(-, Double);
   default:
-    dbgs() << "Unhandled type for FSub instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FSub instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 }
 
@@ -140,8 +160,9 @@ static void executeFMulInst(GenericValue &Dest, GenericValue Src1,
     IMPLEMENT_BINARY_OPERATOR(*, Float);
     IMPLEMENT_BINARY_OPERATOR(*, Double);
   default:
-    dbgs() << "Unhandled type for FMul instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FMul instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 }
 
@@ -151,8 +172,9 @@ static void executeFDivInst(GenericValue &Dest, GenericValue Src1,
     IMPLEMENT_BINARY_OPERATOR(/, Float);
     IMPLEMENT_BINARY_OPERATOR(/, Double);
   default:
-    dbgs() << "Unhandled type for FDiv instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FDiv instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 }
 
@@ -166,8 +188,9 @@ static void executeFRemInst(GenericValue &Dest, GenericValue Src1,
     Dest.DoubleVal = fmod(Src1.DoubleVal, Src2.DoubleVal);
     break;
   default:
-    dbgs() << "Unhandled type for Rem instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for Rem instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 }
 
@@ -205,8 +228,9 @@ static GenericValue executeICMP_EQ(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(eq, Ty);
     IMPLEMENT_POINTER_ICMP(==);
   default:
-    dbgs() << "Unhandled type for ICMP_EQ predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_EQ predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -219,8 +243,9 @@ static GenericValue executeICMP_NE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(ne, Ty);
     IMPLEMENT_POINTER_ICMP(!=);
   default:
-    dbgs() << "Unhandled type for ICMP_NE predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_NE predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -233,8 +258,9 @@ static GenericValue executeICMP_ULT(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(ult, Ty);
     IMPLEMENT_POINTER_ICMP(<);
   default:
-    dbgs() << "Unhandled type for ICMP_ULT predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_ULT predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -247,8 +273,9 @@ static GenericValue executeICMP_SLT(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(slt, Ty);
     IMPLEMENT_POINTER_ICMP(<);
   default:
-    dbgs() << "Unhandled type for ICMP_SLT predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_SLT predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -261,8 +288,9 @@ static GenericValue executeICMP_UGT(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(ugt, Ty);
     IMPLEMENT_POINTER_ICMP(>);
   default:
-    dbgs() << "Unhandled type for ICMP_UGT predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_UGT predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -275,8 +303,9 @@ static GenericValue executeICMP_SGT(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(sgt, Ty);
     IMPLEMENT_POINTER_ICMP(>);
   default:
-    dbgs() << "Unhandled type for ICMP_SGT predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_SGT predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -289,8 +318,9 @@ static GenericValue executeICMP_ULE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(ule, Ty);
     IMPLEMENT_POINTER_ICMP(<=);
   default:
-    dbgs() << "Unhandled type for ICMP_ULE predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_ULE predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -303,8 +333,9 @@ static GenericValue executeICMP_SLE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(sle, Ty);
     IMPLEMENT_POINTER_ICMP(<=);
   default:
-    dbgs() << "Unhandled type for ICMP_SLE predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_SLE predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -317,8 +348,9 @@ static GenericValue executeICMP_UGE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(uge, Ty);
     IMPLEMENT_POINTER_ICMP(>=);
   default:
-    dbgs() << "Unhandled type for ICMP_UGE predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_UGE predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -331,8 +363,9 @@ static GenericValue executeICMP_SGE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_VECTOR_INTEGER_ICMP(sge, Ty);
     IMPLEMENT_POINTER_ICMP(>=);
   default:
-    dbgs() << "Unhandled type for ICMP_SGE predicate: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for ICMP_SGE predicate: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -375,9 +408,10 @@ void Interpreter::visitICmpInst(ICmpInst &I) {
   case ICmpInst::ICMP_SGE:
     R = executeICMP_SGE(Src1, Src2, Ty);
     break;
-  default:
-    dbgs() << "Don't know how to handle this ICmp predicate!\n-->" << I;
-    llvm_unreachable(nullptr);
+  default: {
+    std::string Message = "Unknown ICmp predicate: " + inst_to_string(&I);
+    report_fatal_error(Message.c_str());
+  } break;
   }
 
   SetValue(&I, R, SF);
@@ -413,8 +447,9 @@ static GenericValue executeFCMP_OEQ(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_FCMP(==, Double);
     IMPLEMENT_VECTOR_FCMP(==);
   default:
-    dbgs() << "Unhandled type for FCmp EQ instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FCmp EQ instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -466,8 +501,9 @@ static GenericValue executeFCMP_ONE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_FCMP(!=, Double);
     IMPLEMENT_VECTOR_FCMP(!=);
   default:
-    dbgs() << "Unhandled type for FCmp NE instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FCmp NE instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   // in vector case mask out NaN elements
   if (Ty->isVectorTy())
@@ -486,8 +522,9 @@ static GenericValue executeFCMP_OLE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_FCMP(<=, Double);
     IMPLEMENT_VECTOR_FCMP(<=);
   default:
-    dbgs() << "Unhandled type for FCmp LE instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FCmp LE instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -500,8 +537,9 @@ static GenericValue executeFCMP_OGE(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_FCMP(>=, Double);
     IMPLEMENT_VECTOR_FCMP(>=);
   default:
-    dbgs() << "Unhandled type for FCmp GE instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FCmp GE instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -514,8 +552,9 @@ static GenericValue executeFCMP_OLT(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_FCMP(<, Double);
     IMPLEMENT_VECTOR_FCMP(<);
   default:
-    dbgs() << "Unhandled type for FCmp LT instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FCmp LT instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -528,8 +567,9 @@ static GenericValue executeFCMP_OGT(GenericValue Src1, GenericValue Src2,
     IMPLEMENT_FCMP(>, Double);
     IMPLEMENT_VECTOR_FCMP(>);
   default:
-    dbgs() << "Unhandled type for FCmp GT instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for FCmp GT instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
   return Dest;
 }
@@ -694,10 +734,10 @@ void Interpreter::visitFCmpInst(FCmpInst &I) {
   GenericValue R; // Result
 
   switch (I.getPredicate()) {
-  default:
-    dbgs() << "Don't know how to handle this FCmp predicate!\n-->" << I;
-    llvm_unreachable(nullptr);
-    break;
+  default: {
+    std::string Message = "Unknown FCmp predicate: " + inst_to_string(&I);
+    report_fatal_error(Message.c_str());
+  } break;
   case FCmpInst::FCMP_FALSE:
     R = executeFCMP_BOOL(Src1, Src2, Ty, false);
     break;
@@ -807,9 +847,10 @@ static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1,
     return executeFCMP_BOOL(Src1, Src2, Ty, false);
   case FCmpInst::FCMP_TRUE:
     return executeFCMP_BOOL(Src1, Src2, Ty, true);
-  default:
-    dbgs() << "Unhandled Cmp predicate\n";
-    llvm_unreachable(nullptr);
+  default: {
+    std::string Message = "Unknown Cmp predicate: " + std::to_string(predicate);
+    report_fatal_error(Message.c_str());
+  }
   }
 }
 
@@ -854,17 +895,18 @@ void Interpreter::visitBinaryOperator(BinaryOperator &I) {
       if (cast<VectorType>(Ty)->getElementType()->isDoubleTy())                \
         FLOAT_VECTOR_FUNCTION(OP, DoubleVal)                                   \
       else {                                                                   \
-        dbgs() << "Unhandled type for OP instruction: " << *Ty << "\n";        \
-        llvm_unreachable(0);                                                   \
+        std::string Message =                                                  \
+            "Unhandled type for OP instruction: " + type_to_string(Ty);        \
+        report_fatal_error(Message.c_str());                                   \
       }                                                                        \
     }                                                                          \
   }
 
     switch (I.getOpcode()) {
-    default:
-      dbgs() << "Don't know how to handle this binary operator!\n-->" << I;
-      llvm_unreachable(nullptr);
-      break;
+    default: {
+      std::string Message = "Unknown binary operator: " + inst_to_string(&I);
+      report_fatal_error(Message.c_str());
+    } break;
     case Instruction::Add:
       INTEGER_VECTOR_OPERATION(+) break;
     case Instruction::Sub:
@@ -904,18 +946,19 @@ void Interpreter::visitBinaryOperator(BinaryOperator &I) {
             R.AggregateVal[i].DoubleVal = fmod(Src1.AggregateVal[i].DoubleVal,
                                                Src2.AggregateVal[i].DoubleVal);
         else {
-          dbgs() << "Unhandled type for Rem instruction: " << *Ty << "\n";
-          llvm_unreachable(nullptr);
+          std::string Message =
+              "Unhandled type for Rem instruction: " + type_to_string(Ty);
+          report_fatal_error(Message.c_str());
         }
       }
       break;
     }
   } else {
     switch (I.getOpcode()) {
-    default:
-      dbgs() << "Don't know how to handle this binary operator!\n-->" << I;
-      llvm_unreachable(nullptr);
-      break;
+    default: {
+      std::string Message = "Unknown binary operator: " + inst_to_string(&I);
+      report_fatal_error(Message.c_str());
+    } break;
     case Instruction::Add:
       R.IntVal = Src1.IntVal + Src2.IntVal;
       break;
@@ -1306,56 +1349,56 @@ void Interpreter::visitVACopyInst(VACopyInst &I) {
   ExecutionContext &SF = Interpreter::context();
   SetValue(&I, getOperandValue(*I.arg_begin(), SF), SF);
 }
-static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type* Ty) {
+static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type *Ty) {
   GenericValue Dest;
 
-    switch (Ty->getTypeID()) {
-      case Type::FloatTyID: {
-        APFloat APVal = APFloat(Src1.FloatVal);
-        APVal.clearSign();
-        Dest.FloatVal = APVal.convertToFloat();
-      } break;
-      case Type::DoubleTyID: {
-        APFloat APVal = APFloat(Src1.DoubleVal);
-        APVal.clearSign();
-        Dest.DoubleVal = APVal.convertToDouble();
-      }  break;
-      case Type::IntegerTyID:
-        Dest.IntVal = Src1.IntVal.abs();
-        break;
-      default:
-        report_fatal_error("fabs intrinsic only supports float, double, or int");
+  switch (Ty->getTypeID()) {
+  case Type::FloatTyID: {
+    APFloat APVal = APFloat(Src1.FloatVal);
+    APVal.clearSign();
+    Dest.FloatVal = APVal.convertToFloat();
+  } break;
+  case Type::DoubleTyID: {
+    APFloat APVal = APFloat(Src1.DoubleVal);
+    APVal.clearSign();
+    Dest.DoubleVal = APVal.convertToDouble();
+  } break;
+  case Type::IntegerTyID:
+    Dest.IntVal = Src1.IntVal.abs();
+    break;
+  default:
+    report_fatal_error("fabs intrinsic only supports float, double, or int");
   }
 
   return Dest;
 }
 
 GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
-                                                GenericValue Src3, Type* Ty) {
+                                         GenericValue Src3, Type *Ty) {
   GenericValue Dest;
   switch (Ty->getTypeID()) {
-    case Type::FloatTyID: {
-      float FSrc1 = Src1.FloatVal;
-      float FSrc2 = Src2.FloatVal;
-      float FSrc3 = Src3.FloatVal;
-      Dest.FloatVal = FSrc1 * FSrc2 + FSrc3;
-    } break;
-    case Type::DoubleTyID: {
-      double FSrc1 = Src1.DoubleVal;
-      double FSrc2 = Src2.DoubleVal;
-      double FSrc3 = Src3.DoubleVal;
-      Dest.DoubleVal = FSrc1 * FSrc2 + FSrc3;
-    } break;
-    default: {
-      report_fatal_error("fmuladd intrinsic only supports float and double");
-    }
+  case Type::FloatTyID: {
+    float FSrc1 = Src1.FloatVal;
+    float FSrc2 = Src2.FloatVal;
+    float FSrc3 = Src3.FloatVal;
+    Dest.FloatVal = FSrc1 * FSrc2 + FSrc3;
+  } break;
+  case Type::DoubleTyID: {
+    double FSrc1 = Src1.DoubleVal;
+    double FSrc2 = Src2.DoubleVal;
+    double FSrc3 = Src3.DoubleVal;
+    Dest.DoubleVal = FSrc1 * FSrc2 + FSrc3;
+  } break;
+  default: {
+    report_fatal_error("fmuladd intrinsic only supports float and double");
+  }
   }
   return Dest;
 }
 /*
 GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
-                                                GenericValue Src3, bool isLeft) {
-  GenericValue Dest;
+                                                GenericValue Src3, bool isLeft)
+{ GenericValue Dest;
 
   assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth());
   assert(Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
@@ -1372,9 +1415,9 @@ GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
   return Dest;
 }
 
-static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue Src2,
-                                            GenericValue Src3, Type* Ty, bool isLeft) {
-  
+static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue
+Src2, GenericValue Src3, Type* Ty, bool isLeft) {
+
   GenericValue Dest;
 
   // the operands are vectors
@@ -1385,8 +1428,8 @@ static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue Src2
     Dest.AggregateVal.resize(Src1.AggregateVal.size());
     for (size_t i = 0; i < Src1.AggregateVal.size(); i++) {
       // Somehow we'd like to assert the inner type of this vector is an integer
-      Dest.AggregateVal[i] = executeIntrinsicFshIntInst(Src1.AggregateVal[i], Src2.AggregateVal[i], 
-                                                        Src3.AggregateVal[i], isLeft);
+      Dest.AggregateVal[i] = executeIntrinsicFshIntInst(Src1.AggregateVal[i],
+Src2.AggregateVal[i], Src3.AggregateVal[i], isLeft);
     }
 
   } else {
@@ -1412,7 +1455,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
              SF);
     return;
   }
-    
+
   case Intrinsic::is_constant: {
     Value *Flag = ConstantInt::getFalse(I.getType());
     if (auto *C = dyn_cast<Constant>(I.getOperand(0)))
@@ -1437,7 +1480,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     GenericValue R = executeIntrinsicFmuladdInst(Src1, Src2, Src3, Ty1);
     SetValue(&I, R, SF);
     return;
-  } 
+  }
   /*
   case Intrinsic::fshl: {
     Type *Ty1 = I.getOperand(0)->getType();
@@ -1455,9 +1498,9 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     ++SF.CurInst;
     return;
   }
-  
+
   case Intrinsic::fshr: {
-    
+
     Type *Ty1 = I.getOperand(0)->getType();
     Type *Ty2 = I.getOperand(1)->getType();
     Type *Ty3 = I.getOperand(2)->getType();
@@ -1503,7 +1546,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 }
 
 void Interpreter::visitCallBase(CallBase &I) {
-  if(I.isInlineAsm()) {
+  if (I.isInlineAsm()) {
     report_fatal_error("LLI does not support inline assembly.");
   }
   ExecutionContext &SF = Interpreter::context();
@@ -1521,7 +1564,7 @@ void Interpreter::visitCallBase(CallBase &I) {
     SF.MustResolvePendingReturn = true;
     return;
   } else {
-    callFunction((Function*) GVTOP(SRC), ArgVals);
+    callFunction((Function *)GVTOP(SRC), ArgVals);
   }
 }
 
@@ -1943,7 +1986,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
     }
 
     if (SrcNum * SrcBitSize != DstNum * DstBitSize)
-      llvm_unreachable("Invalid BitCast");
+      report_fatal_error("Invalid BitCast");
 
     // If src is floating point, cast to integer first.
     TempSrc.AggregateVal.resize(SrcNum);
@@ -1961,7 +2004,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
         TempSrc.AggregateVal[i].IntVal = SrcVec.AggregateVal[i].IntVal;
     } else {
       // Pointers are not allowed as the element type of vector.
-      llvm_unreachable("Invalid Bitcast");
+      report_fatal_error("Invalid Bitcast");
     }
 
     // now TempSrc is integer type vector
@@ -2043,7 +2086,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
       } else if (SrcTy->isIntegerTy()) {
         Dest.IntVal = Src.IntVal;
       } else {
-        llvm_unreachable("Invalid BitCast");
+        report_fatal_error("Invalid BitCast");
       }
     } else if (DstTy->isFloatTy()) {
       if (SrcTy->isIntegerTy())
@@ -2058,7 +2101,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
         Dest.DoubleVal = Src.DoubleVal;
       }
     } else {
-      llvm_unreachable("Invalid Bitcast");
+      report_fatal_error("Invalid Bitcast");
     }
   }
 
@@ -2149,8 +2192,9 @@ void Interpreter::visitVAArgInst(VAArgInst &I) {
     IMPLEMENT_VAARG(Float);
     IMPLEMENT_VAARG(Double);
   default:
-    dbgs() << "Unhandled dest type for vaarg instruction: " << *Ty << "\n";
-    llvm_unreachable(nullptr);
+    std::string Message =
+        "Unhandled type for vaarg instruction: " + type_to_string(Ty);
+    report_fatal_error(Message.c_str());
   }
 
   // Set the Value of this Instruction.
@@ -2174,11 +2218,11 @@ void Interpreter::visitExtractElementInst(ExtractElementInst &I) {
 
   if (Src1.AggregateVal.size() > indx) {
     switch (Ty->getTypeID()) {
-    default:
-      dbgs() << "Unhandled destination type for extractelement instruction: "
-             << *Ty << "\n";
-      llvm_unreachable(nullptr);
-      break;
+    default: {
+      std::string Message = "Unhandled type for extractelement instruction: " +
+                            type_to_string(Ty);
+      report_fatal_error(Message.c_str());
+    } break;
     case Type::IntegerTyID:
       Dest.IntVal = Src1.AggregateVal[indx].IntVal;
       break;
@@ -2190,9 +2234,8 @@ void Interpreter::visitExtractElementInst(ExtractElementInst &I) {
       break;
     }
   } else {
-    dbgs() << "Invalid index in extractelement instruction\n";
+    report_fatal_error("Invalid index in extractelement instruction\n");
   }
-
   SetValue(&I, Dest, SF);
 }
 
@@ -2211,10 +2254,10 @@ void Interpreter::visitInsertElementInst(InsertElementInst &I) {
   Dest.AggregateVal = Src1.AggregateVal;
 
   if (Src1.AggregateVal.size() <= indx)
-    llvm_unreachable("Invalid index in insertelement instruction");
+    report_fatal_error("Invalid index in insertelement instruction");
   switch (TyContained->getTypeID()) {
   default:
-    llvm_unreachable("Unhandled dest type for insertelement instruction");
+    report_fatal_error("Unhandled dest type for insertelement instruction");
   case Type::IntegerTyID:
     Dest.AggregateVal[indx].IntVal = Src2.IntVal;
     break;
@@ -2250,7 +2293,7 @@ void Interpreter::visitShuffleVectorInst(ShuffleVectorInst &I) {
 
   switch (TyContained->getTypeID()) {
   default:
-    llvm_unreachable("Unhandled dest type for insertelement instruction");
+    report_fatal_error("Unhandled dest type for insertelement instruction");
     break;
   case Type::IntegerTyID:
     for (unsigned i = 0; i < src3Size; i++) {
@@ -2265,7 +2308,7 @@ void Interpreter::visitShuffleVectorInst(ShuffleVectorInst &I) {
         // %tmp = shufflevector <2 x i32> <i32 3, i32 4>, <2 x i32> undef,
         //                      <2 x i32> < i32 0, i32 5 >,
         // where i32 5 is invalid, but let it be additional check here:
-        llvm_unreachable("Invalid mask in shufflevector instruction");
+        report_fatal_error("Invalid mask in shufflevector instruction");
     }
     break;
   case Type::FloatTyID:
@@ -2277,7 +2320,7 @@ void Interpreter::visitShuffleVectorInst(ShuffleVectorInst &I) {
         Dest.AggregateVal[i].FloatVal =
             Src2.AggregateVal[j - src1Size].FloatVal;
       else
-        llvm_unreachable("Invalid mask in shufflevector instruction");
+        report_fatal_error("Invalid mask in shufflevector instruction");
     }
     break;
   case Type::DoubleTyID:
@@ -2289,7 +2332,7 @@ void Interpreter::visitShuffleVectorInst(ShuffleVectorInst &I) {
         Dest.AggregateVal[i].DoubleVal =
             Src2.AggregateVal[j - src1Size].DoubleVal;
       else
-        llvm_unreachable("Invalid mask in shufflevector instruction");
+        report_fatal_error("Invalid mask in shufflevector instruction");
     }
     break;
   }
@@ -2315,7 +2358,7 @@ void Interpreter::visitExtractValueInst(ExtractValueInst &I) {
       ExtractValueInst::getIndexedType(Agg->getType(), I.getIndices());
   switch (IndexedType->getTypeID()) {
   default:
-    llvm_unreachable("Unhandled dest type for extractelement instruction");
+    report_fatal_error("Unhandled dest type for extractelement instruction");
     break;
   case Type::IntegerTyID:
     Dest.IntVal = pSrc->IntVal;
@@ -2335,7 +2378,7 @@ void Interpreter::visitExtractValueInst(ExtractValueInst &I) {
   case Type::PointerTyID: {
     Dest.PointerVal = pSrc->PointerVal;
     Dest.Provenance = pSrc->Provenance;
-  }  break;
+  } break;
   }
   SetValue(&I, Dest, SF);
 }
@@ -2364,7 +2407,7 @@ void Interpreter::visitInsertValueInst(InsertValueInst &I) {
 
   switch (IndexedType->getTypeID()) {
   default:
-    llvm_unreachable("Unhandled dest type for insertelement instruction");
+    report_fatal_error("Unhandled dest type for insertelement instruction");
     break;
   case Type::IntegerTyID:
     pDest->IntVal = Src2.IntVal;
@@ -2496,7 +2539,7 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE,
     break;
   default:
     dbgs() << "Unhandled ConstantExpr: " << *CE << "\n";
-    llvm_unreachable("Unhandled ConstantExpr");
+    report_fatal_error("Unhandled ConstantExpr");
   }
   return Dest;
 }
@@ -2523,8 +2566,7 @@ GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {
 //===----------------------------------------------------------------------===//
 // callFunction - Execute the specified function...
 //
-void Interpreter::callFunction(Function *F,
-                               ArrayRef<GenericValue> ArgVals) {
+void Interpreter::callFunction(Function *F, ArrayRef<GenericValue> ArgVals) {
   assert((Interpreter::stackIsEmpty() || !Interpreter::context().Caller ||
           Interpreter::context().Caller->arg_size() == ArgVals.size()) &&
          "Incorrect number of arguments passed into function call!");

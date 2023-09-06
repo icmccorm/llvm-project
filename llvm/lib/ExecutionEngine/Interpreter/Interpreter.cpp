@@ -92,7 +92,7 @@ bool Interpreter::stepThread(uint64_t ThreadID,
   if (CallingSF.MustResolvePendingReturn) {
     CallingSF.MustResolvePendingReturn = false;
     if (PendingReturnValue == nullptr) {
-      llvm_unreachable("Expected to receive a return value, but pending return "
+      report_fatal_error("Expected to receive a return value, but pending return "
                        "value is null");
     }
     Instruction &I = *(std::prev(CallingSF.CurInst));
@@ -105,7 +105,7 @@ bool Interpreter::stepThread(uint64_t ThreadID,
     CallingSF.Caller = nullptr; // We returned from the call...
   } else {
     if (PendingReturnValue == nullptr) {
-      llvm_unreachable("Unexpectedly received a pending return value.");
+      report_fatal_error("Unexpectedly received a pending return value.");
     }
   }
   Instruction &I = *CallingSF.CurInst++; // Increment before execute

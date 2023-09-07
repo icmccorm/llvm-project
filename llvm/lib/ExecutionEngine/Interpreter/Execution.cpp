@@ -1522,7 +1522,6 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
     GenericValue R = executeIntrinsicFabsInst(Src1, Ty);
     SetValue(&I, R, SF);
-    ++SF.CurInst;
     return;
   }
 

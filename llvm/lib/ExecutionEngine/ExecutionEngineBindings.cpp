@@ -22,6 +22,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include <cstring>
 #include <iostream>
+#include <optional>
 using namespace std;
 
 using namespace llvm;
@@ -293,7 +294,7 @@ LLVMCreateMCJITCompilerForModule(LLVMExecutionEngineRef *OutJIT,
       .setOptLevel((CodeGenOpt::Level)options.OptLevel)
       .setTargetOptions(targetOptions);
   bool JIT;
-  if (Optional<CodeModel::Model> CM = unwrap(options.CodeModel, JIT))
+  if (std::optional<CodeModel::Model> CM = unwrap(options.CodeModel, JIT))
     builder.setCodeModel(*CM);
   if (options.MCJMM)
     builder.setMCJITMemoryManager(

@@ -296,7 +296,7 @@ public:
 
   void visitInstruction(Instruction &I) {
     std::string Message =
-        "Instruction not interpretable yet: " + std::string(I.getOpcodeName());
+        "LLVM instruction not supported: " + std::string(I.getOpcodeName());
     report_fatal_error(Message.data());
   }
 

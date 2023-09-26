@@ -1527,7 +1527,6 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     SetValue(&I, R, SF);
     return;
   }
-
   default: {
     BasicBlock::iterator Me(&I);
     BasicBlock *Parent = I.getParent();
@@ -1549,7 +1548,9 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 
 void Interpreter::visitCallBase(CallBase &I) {
   if (I.isInlineAsm()) {
-    report_fatal_error("LLI does not support inline assembly.");
+    std::string Message =
+        "Inline assembly instruction not supported: " + std::string(I.getName());
+    report_fatal_error(Message.data());
   }
   ExecutionContext &SF = Interpreter::context();
   SF.Caller = &I;

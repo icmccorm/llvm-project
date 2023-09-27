@@ -233,7 +233,7 @@ void IntrinsicLowering::LowerIntrinsicCall(CallInst *CI) {
     report_fatal_error("Cannot lower a call to a non-intrinsic function '"+
                       Callee->getName() + "'!");
   default: {
-    ReplaceCallWith(Callee->getName(), CI->arg_begin(), Ops, CI->arg_end(), CI->getArgOperand(0)->getType());
+    ReplaceCallWith(Callee->getName(), CI, CI->arg_begin(), CI->arg_end(), CI->getArgOperand(0)->getType());
     break;
   }
   case Intrinsic::expect: {

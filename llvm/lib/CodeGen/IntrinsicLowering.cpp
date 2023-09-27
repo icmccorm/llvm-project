@@ -232,10 +232,10 @@ void IntrinsicLowering::LowerIntrinsicCall(CallInst *CI) {
   case Intrinsic::not_intrinsic:
     report_fatal_error("Cannot lower a call to a non-intrinsic function '"+
                       Callee->getName() + "'!");
-  default:
-    report_fatal_error("Code generator does not support intrinsic function '"+
-                      Callee->getName()+"'!");
-
+  default: {
+    ReplaceCallWith(Callee->getName(), CI->arg_begin(), Ops, CI->arg_end(), CI->getArgOperand(0)->getType());
+    break;
+  }
   case Intrinsic::expect: {
     // Just replace __builtin_expect(exp, c) with EXP.
     Value *V = CI->getArgOperand(0);

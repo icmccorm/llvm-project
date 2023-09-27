@@ -18,8 +18,8 @@
 
 #ifndef LLVM_C_EXECUTIONENGINE_H
 #define LLVM_C_EXECUTIONENGINE_H
-
 #include "llvm-c/ExternC.h"
+#include "llvm-c/Miri.h"
 #include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
 #include "llvm-c/Types.h"
@@ -36,7 +36,6 @@ LLVM_C_EXTERN_C_BEGIN
 void LLVMLinkInMCJIT(void);
 void LLVMLinkInInterpreter(void);
 
-typedef struct LLVMOpaqueGenericValue *LLVMGenericValueRef;
 typedef struct LLVMOpaqueExecutionEngine *LLVMExecutionEngineRef;
 typedef struct LLVMOpaqueMCJITMemoryManager *LLVMMCJITMemoryManagerRef;
 
@@ -50,42 +49,84 @@ struct LLVMMCJITCompilerOptions {
 
 /*===-- Operations on generic values --------------------------------------===*/
 
+LLVMGenericValueRef LLVMCreateGenericValueOfData(const uint8_t *Data,
+                                                 uint32_t Len);
+
 LLVMGenericValueRef LLVMCreateGenericValueOfInt(LLVMTypeRef Ty,
                                                 unsigned long long N,
                                                 LLVMBool IsSigned);
 
+LLVMGenericValueRef LLVMCreateAggregateGenericValue(uint64_t NumMembers);
+
+void LLVMGenericValueAppendAggregateValue(LLVMGenericValueRef GenVal,
+                                          LLVMGenericValueRef GenValElement);
+
+void LLVMGenericValueEnsureCapacity(LLVMGenericValueRef GenVal,
+                                    uint64_t Capacity);
+
 LLVMGenericValueRef LLVMCreateGenericValueOfPointer(void *P);
+
+LLVMGenericValueRef LLVMCreateGenericValueOfMiriPointer(MiriPointer Prov);
 
 LLVMGenericValueRef LLVMCreateGenericValueOfFloat(LLVMTypeRef Ty, double N);
 
-unsigned LLVMGenericValueIntWidth(LLVMGenericValueRef GenValRef);
+LLVMGenericValueRef LLVMCreateGenericValueOfFloatSingle(float N);
 
-unsigned long long LLVMGenericValueToInt(LLVMGenericValueRef GenVal,
-                                         LLVMBool IsSigned);
+LLVMGenericValueRef LLVMCreateGenericValueOfFloatDouble(double N);
+
+unsigned LLVMGenericValueIntWidth(LLVMGenericValueRef GenValRef);
 
 void *LLVMGenericValueToPointer(LLVMGenericValueRef GenVal);
 
+MiriPointer LLVMGenericValueToMiriPointer(LLVMGenericValueRef GenVal);
+
 double LLVMGenericValueToFloat(LLVMTypeRef TyRef, LLVMGenericValueRef GenVal);
 
+float LLVMGenericValueToFloatSingle(LLVMGenericValueRef GenVal);
+
+double LLVMGenericValueToFloatDouble(LLVMGenericValueRef GenVal);
+
+void LLVMGenericValueSetDoubleValue(LLVMGenericValueRef GenVal,
+                                    double DoubleVal);
+
+void LLVMGenericValueSetFloatValue(LLVMGenericValueRef GenVal, float FloatVal);
+
+void LLVMGenericValueSetIntValue(LLVMGenericValueRef GenVal, uint64_t *Data,
+                                 uint64_t Bytes);
+
+APIntPointer LLVMGenericValueToInt(LLVMGenericValueRef GenVal);
+
+void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
+                                         MiriPointer Ptr);
+
+LLVMGenericValueRef
+LLVMGetPointerToAggregateGenericValue(LLVMGenericValueRef GenValRef,
+                                      uint64_t Index);
+
+size_t LLVMGetAggregateGenericValueLength(LLVMGenericValueRef GenValRef);
+
 void LLVMDisposeGenericValue(LLVMGenericValueRef GenVal);
+
+LLVMGenericValueRef
+LLVMGenericValueArrayRefGetElementAt(LLVMGenericValueArrayRef GenArray,
+                                     uint64_t Index);
+
+uint64_t LLVMGenericValueArrayRefLength(LLVMGenericValueArrayRef GenArray);
 
 /*===-- Operations on execution engines -----------------------------------===*/
 
 LLVMBool LLVMCreateExecutionEngineForModule(LLVMExecutionEngineRef *OutEE,
-                                            LLVMModuleRef M,
-                                            char **OutError);
+                                            LLVMModuleRef M, char **OutError);
 
 LLVMBool LLVMCreateInterpreterForModule(LLVMExecutionEngineRef *OutInterp,
-                                        LLVMModuleRef M,
-                                        char **OutError);
+                                        LLVMModuleRef M, char **OutError);
 
 LLVMBool LLVMCreateJITCompilerForModule(LLVMExecutionEngineRef *OutJIT,
-                                        LLVMModuleRef M,
-                                        unsigned OptLevel,
+                                        LLVMModuleRef M, unsigned OptLevel,
                                         char **OutError);
 
 void LLVMInitializeMCJITCompilerOptions(
-  struct LLVMMCJITCompilerOptions *Options, size_t SizeOfOptions);
+    struct LLVMMCJITCompilerOptions *Options, size_t SizeOfOptions);
 
 /**
  * Create an MCJIT execution engine for a module, with the given options. It is
@@ -104,10 +145,11 @@ void LLVMInitializeMCJITCompilerOptions(
  *
  * LLVMCreateMCJITCompilerForModule(&jit, mod, 0, 0, &error);
  */
-LLVMBool LLVMCreateMCJITCompilerForModule(
-  LLVMExecutionEngineRef *OutJIT, LLVMModuleRef M,
-  struct LLVMMCJITCompilerOptions *Options, size_t SizeOfOptions,
-  char **OutError);
+LLVMBool
+LLVMCreateMCJITCompilerForModule(LLVMExecutionEngineRef *OutJIT,
+                                 LLVMModuleRef M,
+                                 struct LLVMMCJITCompilerOptions *Options,
+                                 size_t SizeOfOptions, char **OutError);
 
 void LLVMDisposeExecutionEngine(LLVMExecutionEngineRef EE);
 
@@ -116,8 +158,8 @@ void LLVMRunStaticConstructors(LLVMExecutionEngineRef EE);
 void LLVMRunStaticDestructors(LLVMExecutionEngineRef EE);
 
 int LLVMRunFunctionAsMain(LLVMExecutionEngineRef EE, LLVMValueRef F,
-                          unsigned ArgC, const char * const *ArgV,
-                          const char * const *EnvP);
+                          unsigned ArgC, const char *const *ArgV,
+                          const char *const *EnvP);
 
 LLVMGenericValueRef LLVMRunFunction(LLVMExecutionEngineRef EE, LLVMValueRef F,
                                     unsigned NumArgs,
@@ -141,7 +183,7 @@ LLVMTargetMachineRef
 LLVMGetExecutionEngineTargetMachine(LLVMExecutionEngineRef EE);
 
 void LLVMAddGlobalMapping(LLVMExecutionEngineRef EE, LLVMValueRef Global,
-                          void* Addr);
+                          void *Addr);
 
 void *LLVMGetPointerToGlobal(LLVMExecutionEngineRef EE, LLVMValueRef Global);
 
@@ -153,17 +195,77 @@ uint64_t LLVMGetFunctionAddress(LLVMExecutionEngineRef EE, const char *Name);
 /// message is copied to OutStr and cleared in the ExecutionEngine instance.
 LLVMBool LLVMExecutionEngineGetErrMsg(LLVMExecutionEngineRef EE,
                                       char **OutError);
+/*===-- Interoperation with Miri ------------------------------------------===*/
+
+void LLVMExecutionEngineSetMiriCallByNameHook(
+    LLVMExecutionEngineRef EE, MiriCallByNameHook IncomingCallbackHook);
+
+void LLVMExecutionEngineSetMiriCallByPointerHook(
+    LLVMExecutionEngineRef EE, MiriCallByPointerHook IncomingCallbackHook);
+
+void LLVMExecutionEngineSetMiriInterpCxWrapper(LLVMExecutionEngineRef EE,
+                                               void *MiriWrapper);
+
+void LLVMExecutionEngineSetMiriLoadHook(LLVMExecutionEngineRef EE,
+                                        MiriLoadStoreHook IncomingLoadHook);
+
+void LLVMExecutionEngineSetMiriStoreHook(LLVMExecutionEngineRef EE,
+                                         MiriLoadStoreHook IncomingStoreHook);
+
+void LLVMExecutionEngineSetMiriMalloc(LLVMExecutionEngineRef EE,
+                                      MiriAllocationHook IncomingMallocHook);
+
+void LLVMExecutionEngineSetMiriFree(LLVMExecutionEngineRef EE,
+                                    MiriFreeHook IncomingFreeHook);
+
+void LLVMExecutionEngineSetMiriStackTraceRecorderHook(
+    LLVMExecutionEngineRef EE,
+    MiriStackTraceRecorderHook IncomingStackTraceRecorderHook);
+
+void LLVMExecutionEngineSetMiriMemset(LLVMExecutionEngineRef EE,
+                                      MiriMemset IncomingMemset);
+
+void LLVMExecutionEngineSetMiriMemcpy(LLVMExecutionEngineRef EE,
+                                      MiriMemcpy IncomingMemcpy);
+
+void LLVMExecutionEngineSetMiriIntToPtr(LLVMExecutionEngineRef EE,
+                                        MiriIntToPtr IncomingIntToPtr);
+
+void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
+                                        MiriPtrToInt IncomingPtrToInt);
+
+void LLVMExecutionEngineSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE,
+                                                  MiriRegisterGlobalHook Hook);
+
+LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
+                                       uint64_t ThreadID,
+                                       LLVMGenericValueRef PendingReturnVal);
+
+void LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
+                                     uint64_t ThreadID, LLVMValueRef F,
+                                     unsigned NumArgs,
+                                     LLVMGenericValueRef *Args);
+
+LLVMGenericValueRef
+LLVMExecutionEngineGetThreadExitValue(LLVMExecutionEngineRef EE,
+                                      uint64_t ThreadID);
+
+LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,
+                                      uint64_t ThreadID);
+
+void LLVMExecutionEngineTerminateThread(LLVMExecutionEngineRef EE,
+                                        uint64_t ThreadID);
 
 /*===-- Operations on memory managers -------------------------------------===*/
 
 typedef uint8_t *(*LLVMMemoryManagerAllocateCodeSectionCallback)(
-  void *Opaque, uintptr_t Size, unsigned Alignment, unsigned SectionID,
-  const char *SectionName);
+    void *Opaque, uintptr_t Size, unsigned Alignment, unsigned SectionID,
+    const char *SectionName);
 typedef uint8_t *(*LLVMMemoryManagerAllocateDataSectionCallback)(
-  void *Opaque, uintptr_t Size, unsigned Alignment, unsigned SectionID,
-  const char *SectionName, LLVMBool IsReadOnly);
-typedef LLVMBool (*LLVMMemoryManagerFinalizeMemoryCallback)(
-  void *Opaque, char **ErrMsg);
+    void *Opaque, uintptr_t Size, unsigned Alignment, unsigned SectionID,
+    const char *SectionName, LLVMBool IsReadOnly);
+typedef LLVMBool (*LLVMMemoryManagerFinalizeMemoryCallback)(void *Opaque,
+                                                            char **ErrMsg);
 typedef void (*LLVMMemoryManagerDestroyCallback)(void *Opaque);
 
 /**
@@ -178,11 +280,11 @@ typedef void (*LLVMMemoryManagerDestroyCallback)(void *Opaque);
  *   success, 1 on error.
  */
 LLVMMCJITMemoryManagerRef LLVMCreateSimpleMCJITMemoryManager(
-  void *Opaque,
-  LLVMMemoryManagerAllocateCodeSectionCallback AllocateCodeSection,
-  LLVMMemoryManagerAllocateDataSectionCallback AllocateDataSection,
-  LLVMMemoryManagerFinalizeMemoryCallback FinalizeMemory,
-  LLVMMemoryManagerDestroyCallback Destroy);
+    void *Opaque,
+    LLVMMemoryManagerAllocateCodeSectionCallback AllocateCodeSection,
+    LLVMMemoryManagerAllocateDataSectionCallback AllocateDataSection,
+    LLVMMemoryManagerFinalizeMemoryCallback FinalizeMemory,
+    LLVMMemoryManagerDestroyCallback Destroy);
 
 void LLVMDisposeMCJITMemoryManager(LLVMMCJITMemoryManagerRef MM);
 

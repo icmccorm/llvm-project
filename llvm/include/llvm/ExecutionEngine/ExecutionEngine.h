@@ -189,6 +189,8 @@ public:
   /// be held while changing the internal state of any of those classes.
   sys::Mutex lock;
   void *MiriWrapper = nullptr;
+  std::vector<Function *> Constructors;
+  std::vector<Function *> Destructors;
 
   //===--------------------------------------------------------------------===//
   //  ExecutionEngine Startup
@@ -317,6 +319,11 @@ public:
   /// Returns the most recent error message.
   const std::string &getErrorMessage() const { return ErrMsg; }
 
+  void initializeConstructorDestructorList(Module &module,
+                                          std::vector<Function *> &functionList,
+                                          bool isDtors);
+
+  void initializeConstructorDestructorLists();
   /// runStaticConstructorsDestructors - This method is used to execute all of
   /// the static constructors or destructors for a program.
   ///
@@ -349,7 +356,6 @@ public:
 
   void addExternalGlobalMapping(const GlobalValue *GV, void *Addr);
   void addExternalGlobalMapping(StringRef Name, uint64_t Addr);
-
 
   MiriPointer getMiriPointerToGlobalByName(const std::string &Name);
 

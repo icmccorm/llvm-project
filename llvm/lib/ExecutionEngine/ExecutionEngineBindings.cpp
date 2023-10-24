@@ -400,6 +400,31 @@ void LLVMExecutionEngineSetMiriRegisterGlobalHook(
   unwrap(EE)->setMiriRegisterGlobalHook(GlobalHook);
 }
 
+void LLVMExecutionEngineInitializeConstructorDestructorLists(LLVMExecutionEngineRef EE) {
+  unwrap(EE)->initializeConstructorDestructorLists();
+}
+
+uint64_t LLVMExecutionEngineGetConstructorCount(LLVMExecutionEngineRef EE) {
+  return (uint64_t)unwrap(EE)->Constructors.size();
+}
+
+uint64_t LLVMExecutionEngineGetDestructorCount(LLVMExecutionEngineRef EE) {
+  return (uint64_t)unwrap(EE)->Destructors.size();
+}
+
+LLVMValueRef LLVMExecutionEngineGetDestructorAtIndex(LLVMExecutionEngineRef EE,
+                                                     uint64_t Index) {
+  if (Index
+    >= unwrap(EE)->Destructors.size()) { return NULL; }
+  return wrap(unwrap(EE)->Destructors.at(Index));
+} 
+LLVMValueRef LLVMExecutionEngineGetConstructorAtIndex(LLVMExecutionEngineRef EE,
+                                                      uint64_t Index) {
+  if (Index
+    >= unwrap(EE)->Constructors.size()) { return NULL; }
+  return wrap(unwrap(EE)->Constructors.at(Index));
+}
+
 uint64_t LLVMGetGlobalValueAddress(LLVMExecutionEngineRef EE,
                                    const char *Name) {
   return unwrap(EE)->getGlobalValueAddress(Name);

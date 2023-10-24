@@ -43,10 +43,8 @@ ExecutionEngine *Interpreter::create(std::unique_ptr<Module> M,
     // We got an error, just return 0
     return nullptr;
   }
-
   return new Interpreter(std::move(M));
 }
-
 //===----------------------------------------------------------------------===//
 // Interpreter ctor - Initialize stuff
 //
@@ -55,7 +53,6 @@ Interpreter::Interpreter(std::unique_ptr<Module> M)
   // Initialize the "backend"
   initializeExecutionEngine();
   // initializeExternalFunctions();
-
   IL = new IntrinsicLowering(getDataLayout());
 }
 
@@ -70,7 +67,7 @@ void Interpreter::runAtExitHandlers() {
 }
 
 void Interpreter::createThread(uint64_t NextThreadID, Function *F,
-                                        std::vector<GenericValue> Args) {
+                               std::vector<GenericValue> Args) {
   assert(F && "Function *F was null at entry to run()");
   ArrayRef<GenericValue> ArgsRef =
       Interpreter::createThreadContext(NextThreadID, Args);
@@ -92,8 +89,9 @@ bool Interpreter::stepThread(uint64_t ThreadID,
   if (CallingSF.MustResolvePendingReturn) {
     CallingSF.MustResolvePendingReturn = false;
     if (PendingReturnValue == nullptr) {
-      report_fatal_error("Expected to receive a return value, but pending return "
-                       "value is null");
+      report_fatal_error(
+          "Expected to receive a return value, but pending return "
+          "value is null");
     }
     Instruction &I = *(std::prev(CallingSF.CurInst));
     CallBase &Caller = static_cast<CallBase &>(I);
@@ -114,7 +112,7 @@ bool Interpreter::stepThread(uint64_t ThreadID,
 
   return Interpreter::stackIsEmpty();
 }
- 
+
 GenericValue *Interpreter::getThreadExitValueByID(uint64_t ThreadID) {
   if (!Interpreter::hasThread(ThreadID)) {
     return nullptr;
@@ -145,7 +143,7 @@ GenericValue Interpreter::runFunction(Function *F,
   const size_t ArgCount = F->getFunctionType()->getNumParams();
   ArrayRef<GenericValue> ActualArgs =
       ArgValues.slice(0, std::min(ArgValues.size(), ArgCount));
-  
+
   // Set up the function call.
   callFunction(F, ActualArgs);
 
@@ -165,9 +163,9 @@ void Interpreter::registerMiriErrorWithoutLocation() {
       if (Loc) {
         StringRef ErrorFile = Loc->getFilename();
         StringRef ErrorDir = Loc->getDirectory();
-        CallStackTrace.push_back(MiriErrorTrace{ErrorDir.data(), ErrorDir.size(),
-                                            ErrorFile.data(), ErrorFile.size(),
-                                            Loc->getLine(), Loc->getColumn()});
+        CallStackTrace.push_back(
+            MiriErrorTrace{ErrorDir.data(), ErrorDir.size(), ErrorFile.data(),
+                           ErrorFile.size(), Loc->getLine(), Loc->getColumn()});
       }
     }
   }
@@ -175,7 +173,7 @@ void Interpreter::registerMiriErrorWithoutLocation() {
                     CallStackTrace.end());
   if (Interpreter::miriIsInitialized()) {
     this->MiriStackTraceRecorder(this->MiriWrapper, StackTrace.data(),
-                                  StackTrace.size());
+                                 StackTrace.size());
   }
 }
 void Interpreter::registerMiriError(Instruction &I) {

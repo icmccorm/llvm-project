@@ -441,6 +441,53 @@ void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
   return Array.get();
 }
 
+void ExecutionEngine::initializeConstructorDestructorList(Module &module,
+                                         std::vector<Function *> &functionList,
+                                         bool isDtors) {
+  StringRef Name(isDtors ? "llvm.global_dtors" : "llvm.global_ctors");
+  GlobalVariable *GV = module.getNamedGlobal(Name);
+
+  // If this global has internal linkage, or if it has a use, then it must be
+  // an old-style (llvmgcc3) static ctor with __main linked in and in use.  If
+  // this is the case, don't execute any of the global ctors, __main will do
+  // it.
+  if (!GV || GV->isDeclaration() || GV->hasLocalLinkage())
+    return;
+
+  // Should be an array of '{ i32, void ()* }' structs.  The first value is
+  // the init priority, which we ignore.
+  ConstantArray *InitList = dyn_cast<ConstantArray>(GV->getInitializer());
+  if (!InitList)
+    return;
+  for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i) {
+    ConstantStruct *CS = dyn_cast<ConstantStruct>(InitList->getOperand(i));
+    if (!CS)
+      continue;
+
+    Constant *FP = CS->getOperand(1);
+    if (FP->isNullValue())
+      continue; // Found a sentinal value, ignore.
+
+    // Strip off constant expression casts.
+    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(FP))
+      if (CE->isCast())
+        FP = CE->getOperand(0);
+
+    // store the ctor/dtor function!
+    if (Function *F = dyn_cast<Function>(FP))
+      functionList.push_back(F);
+  }
+}
+
+void ExecutionEngine::initializeConstructorDestructorLists() {
+  Constructors.clear();
+  Destructors.clear();
+  for (std::unique_ptr<Module> &M : Modules) {
+    initializeConstructorDestructorList(*M, Constructors, false);
+    initializeConstructorDestructorList(*M, Destructors, true);
+  }
+}
+
 void ExecutionEngine::runStaticConstructorsDestructors(Module &module,
                                                        bool isDtors) {
   StringRef Name(isDtors ? "llvm.global_dtors" : "llvm.global_ctors");
@@ -729,7 +776,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       cast<GEPOperator>(CE)->accumulateConstantOffset(DL, Offset);
 
       char *tmp = (char *)ConstResult.PointerVal;
-      
+
       GenericValue Result = PTOGV(tmp + Offset.getSExtValue());
       Result.Provenance = ConstResult.Provenance;
       return Result;
@@ -1034,9 +1081,11 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
     } else if (const Function *F = dyn_cast<Function>(C)) {
       Result = PTOGV(getPointerToFunctionOrStub(const_cast<Function *>(F)));
     } else if (isa<GlobalIFunc>(C)) {
-      report_fatal_error("Constant global indirect functions are not supported.");
-    } else if (isa<BlockAddress>(C)){
-      report_fatal_error("Constant pointers to basic blocks are not supported.");
+      report_fatal_error(
+          "Constant global indirect functions are not supported.");
+    } else if (isa<BlockAddress>(C)) {
+      report_fatal_error(
+          "Constant pointers to basic blocks are not supported.");
     } else if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(C)) {
       void *Addr = getOrEmitGlobalVariable(const_cast<GlobalVariable *>(GV));
       MiriProvenance Prov = getProvenanceOfGlobalIfAvailable(Addr);
@@ -1247,8 +1296,7 @@ bool ExecutionEngine::StoreToMiriMemory(GenericValue *Source, MiriPointer Dest,
 /// FIXME: document
 ///
 void ExecutionEngine::LoadValueFromMemory(GenericValue &Result,
-                                          GenericValue *Ptr,
-                                          Type *Ty) {
+                                          GenericValue *Ptr, Type *Ty) {
   if (auto *TETy = dyn_cast<TargetExtType>(Ty))
     Ty = TETy->getLayoutType();
 

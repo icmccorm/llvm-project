@@ -97,7 +97,19 @@ void LLVMGenericValueSetIntValue(LLVMGenericValueRef GenVal, uint64_t *Data,
 APIntPointer LLVMGenericValueToInt(LLVMGenericValueRef GenVal);
 
 void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
-                                         MiriPointer Ptr);
+                                         MiriPointer Ptr); 
+                                         
+void LLVMExecutionEngineInitializeConstructorDestructorLists(LLVMExecutionEngineRef EE);
+
+uint64_t LLVMExecutionEngineGetConstructorCount(LLVMExecutionEngineRef EE);
+
+uint64_t LLVMExecutionEngineGetDestructorCount(LLVMExecutionEngineRef EE);
+
+LLVMValueRef LLVMExecutionEngineGetDestructorAtIndex(LLVMExecutionEngineRef EE,
+                                                     uint64_t Index);
+
+LLVMValueRef LLVMExecutionEngineGetConstructorAtIndex(LLVMExecutionEngineRef EE,
+                                                      uint64_t Index);
 
 LLVMGenericValueRef
 LLVMGetPointerToAggregateGenericValue(LLVMGenericValueRef GenValRef,

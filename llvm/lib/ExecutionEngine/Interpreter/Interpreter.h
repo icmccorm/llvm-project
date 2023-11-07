@@ -84,6 +84,7 @@ struct ExecutionContext {
   ExecutionContext &operator=(ExecutionContext &&RHS) = default;
   Function *CurFunction;        // The currently executing function
   BasicBlock *CurBB;            // The currently executing BB
+  Instruction * PreviousInst;
   BasicBlock::iterator CurInst; // The next instruction to execute
   CallBase *Caller;             // Holds the call that called subframes.
   bool MustResolvePendingReturn;
@@ -94,7 +95,7 @@ struct ExecutionContext {
   AllocaHolder Allocas;                   // Track memory allocated by alloca
   MiriAllocaHolder MiriAllocas;
   ExecutionContext(void *Wrapper, MiriFreeHook MiriFree)
-      : CurFunction(nullptr), CurBB(nullptr), CurInst(nullptr), Caller(nullptr),
+      : CurFunction(nullptr), CurBB(nullptr), PreviousInst(nullptr), CurInst(nullptr), Caller(nullptr),
         MustResolvePendingReturn(false), AwaitingReturn(GenericValue(0)),
         MiriAllocas(Wrapper, MiriFree) {}
 };

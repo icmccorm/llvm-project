@@ -107,7 +107,7 @@ bool Interpreter::stepThread(uint64_t ThreadID,
     }
   }
   Instruction &I = *CallingSF.CurInst++; // Increment before execute
-
+  CallingSF.PreviousInst = &*std::prev(CallingSF.CurInst);
   visit(I); // Dispatch to one of the visit* methods...
 
   return Interpreter::stackIsEmpty();
@@ -169,11 +169,21 @@ void Interpreter::registerMiriErrorWithoutLocation() {
       }
     }
   }
+  Instruction *LastInstruction = CurrentPath->ECStack.back().PreviousInst;
+  std::string InstString;
+  llvm::raw_string_ostream InstStream(InstString);
+  const char *AsString = NULL;
+  uint64_t Length = 0;
+  if (LastInstruction != NULL) {
+    LastInstruction->print(InstStream);
+    AsString = InstStream.str().c_str();
+    Length = InstStream.str().size();
+  }
   StackTrace.insert(StackTrace.begin(), CallStackTrace.begin(),
                     CallStackTrace.end());
   if (Interpreter::miriIsInitialized()) {
     this->MiriStackTraceRecorder(this->MiriWrapper, StackTrace.data(),
-                                 StackTrace.size());
+                                 StackTrace.size(), AsString, Length);
   }
 }
 void Interpreter::registerMiriError(Instruction &I) {

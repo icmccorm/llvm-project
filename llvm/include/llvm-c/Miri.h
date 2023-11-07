@@ -59,7 +59,7 @@ typedef bool (*MiriFreeHook)(void *, MiriPointer);
 typedef bool (*MiriLoadStoreHook)(void *, LLVMGenericValueRef, MiriPointer,
                                   LLVMTypeRef, uint64_t, uint64_t);
 typedef void (*MiriStackTraceRecorderHook)(void *, MiriErrorTrace *const,
-                                           uint64_t);
+                                           uint64_t, const char *, uint64_t);
 typedef bool (*MiriCallByNameHook)(void *, LLVMGenericValueArrayRef,
                                    const char *, uint64_t, LLVMTypeRef);
 typedef bool (*MiriCallByPointerHook)(void *, MiriPointer,

@@ -2191,9 +2191,12 @@ void Interpreter::visitVAArgInst(VAArgInst &I) {
   case Type::IntegerTyID:
     Dest.IntVal = Src.IntVal;
     break;
-    IMPLEMENT_VAARG(Pointer);
-    IMPLEMENT_VAARG(Float);
-    IMPLEMENT_VAARG(Double);
+  case Type::PointerTyID:    
+    Dest.PointerVal = Src.PointerVal;
+    Dest.Provenance = Src.Provenance;
+    break;
+  IMPLEMENT_VAARG(Float);
+  IMPLEMENT_VAARG(Double);
   default:
     std::string Message =
         "Unhandled type for vaarg instruction: " + type_to_string(Ty);

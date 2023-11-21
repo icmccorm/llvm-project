@@ -183,6 +183,7 @@ protected:
   MiriIntToPtr MIntToPtr = nullptr;
   MiriPtrToInt MPtrToInt = nullptr;
   MiriRegisterGlobalHook MiriRegisterGlobal = nullptr;
+  MiriGetElementPointerHook MiriGetElementPointer = nullptr;
 
 public:
   /// lock - This lock protects the ExecutionEngine and MCJIT classes. It must
@@ -579,6 +580,10 @@ public:
     MiriStore = IncomingStoreHook;
   }
 
+  void setMiriGetElementPointerHook(MiriGetElementPointerHook IncomingGEPHook) {
+    MiriGetElementPointer = IncomingGEPHook;
+  }
+
   void setMiriMalloc(MiriAllocationHook IncomingMalloc) {
     MiriMalloc = IncomingMalloc;
   }
@@ -605,7 +610,7 @@ public:
     return MiriWrapper && MiriCallByName && MiriCallByPointer &&
            MiriStackTraceRecorder && MiriLoad && MiriStore && MiriMalloc &&
            MiriFree && MMemset && MMemcpy && MIntToPtr && MPtrToInt &&
-           MiriRegisterGlobal;
+           MiriRegisterGlobal && MiriGetElementPointer;
   }
 
   virtual void createThread(uint64_t NextThreadID, Function *F,

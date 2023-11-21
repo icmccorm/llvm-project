@@ -1262,8 +1262,13 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
 
   GenericValue Result;
   GenericValue OperandValue = getOperandValue(Ptr, SF);
-  Result.PointerVal = ((char *)OperandValue.PointerVal) + Total;
-  Result.Provenance = OperandValue.Provenance;
+  if(ExecutionEngine::miriIsInitialized()) {
+    MiriPointer OperandMiriPointerVal = GVTOMiriPointer(OperandValue);
+    Result = MiriPointerTOGV(ExecutionEngine::MiriGetElementPointer(ExecutionEngine::MiriWrapper, OperandMiriPointerVal, Total));
+  }else{
+    Result.PointerVal = ((char *)OperandValue.PointerVal) + Total;
+    Result.Provenance = OperandValue.Provenance;
+  }
   LLVM_DEBUG(dbgs() << "GEP Index " << Total << " bytes.\n");
   return Result;
 }

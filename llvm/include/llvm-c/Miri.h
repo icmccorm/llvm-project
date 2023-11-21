@@ -55,6 +55,7 @@ typedef MiriPointer (*MiriIntToPtr)(void *, uint64_t);
 typedef uint64_t (*MiriPtrToInt)(void *, MiriPointer);
 
 typedef MiriPointer (*MiriAllocationHook)(void *, uint64_t, uint64_t, bool);
+typedef MiriPointer (*MiriGetElementPointerHook)(void *, MiriPointer, uint64_t);
 typedef bool (*MiriFreeHook)(void *, MiriPointer);
 typedef bool (*MiriLoadStoreHook)(void *, LLVMGenericValueRef, MiriPointer,
                                   LLVMTypeRef, uint64_t, uint64_t);
@@ -66,5 +67,6 @@ typedef bool (*MiriCallByPointerHook)(void *, MiriPointer,
                                       LLVMGenericValueArrayRef, LLVMTypeRef);
 typedef bool (*MiriRegisterGlobalHook)(void *, const char *, uint64_t,
                                        MiriPointer);
+
 LLVM_C_EXTERN_C_END
 #endif // LLVM_C_MIRI_H

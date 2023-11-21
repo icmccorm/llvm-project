@@ -249,6 +249,9 @@ void LLVMExecutionEngineSetMiriPtrToInt(LLVMExecutionEngineRef EE,
 void LLVMExecutionEngineSetMiriRegisterGlobalHook(LLVMExecutionEngineRef EE,
                                                   MiriRegisterGlobalHook Hook);
 
+void LLVMExecutionEngineSetMiriGetElementPointerHook(
+    LLVMExecutionEngineRef EE, MiriGetElementPointerHook Hook);
+
 LLVMBool LLVMExecutionEngineStepThread(LLVMExecutionEngineRef EE,
                                        uint64_t ThreadID,
                                        LLVMGenericValueRef PendingReturnVal);

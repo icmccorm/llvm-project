@@ -460,6 +460,15 @@ void LLVMExecutionEngineSetMiriCallByPointerHook(
   ExecEngine->setMiriCallByPointer(IncomingCallbackHook);
 }
 
+void LLVMExecutionEngineSetMiriGetElementPointerHook(
+    LLVMExecutionEngineRef EE,
+    MiriGetElementPointerHook IncomingGetElementPointerHook) {
+  assert(IncomingGetElementPointerHook &&
+         "IncomingGetElementPointerHook must be non-null");
+  auto *ExecEngine = unwrap(EE);
+  ExecEngine->setMiriGetElementPointer(IncomingGetElementPointerHook);
+}
+
 void LLVMExecutionEngineSetMiriStackTraceRecorderHook(
     LLVMExecutionEngineRef EE,
     MiriStackTraceRecorderHook IncomingStackTraceRecorderHook) {

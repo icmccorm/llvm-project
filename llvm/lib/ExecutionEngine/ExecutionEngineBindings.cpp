@@ -466,7 +466,7 @@ void LLVMExecutionEngineSetMiriGetElementPointerHook(
   assert(IncomingGetElementPointerHook &&
          "IncomingGetElementPointerHook must be non-null");
   auto *ExecEngine = unwrap(EE);
-  ExecEngine->setMiriGetElementPointer(IncomingGetElementPointerHook);
+  ExecEngine->setMiriGetElementPointerHook(IncomingGetElementPointerHook);
 }
 
 void LLVMExecutionEngineSetMiriStackTraceRecorderHook(

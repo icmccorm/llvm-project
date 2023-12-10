@@ -1262,10 +1262,11 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
 
   GenericValue Result;
   GenericValue OperandValue = getOperandValue(Ptr, SF);
-  if(ExecutionEngine::miriIsInitialized()) {
+  if (ExecutionEngine::miriIsInitialized()) {
     MiriPointer OperandMiriPointerVal = GVTOMiriPointer(OperandValue);
-    Result = MiriPointerTOGV(ExecutionEngine::MiriGetElementPointer(ExecutionEngine::MiriWrapper, OperandMiriPointerVal, Total));
-  }else{
+    Result = MiriPointerTOGV(ExecutionEngine::MiriGetElementPointer(
+        ExecutionEngine::MiriWrapper, OperandMiriPointerVal, Total));
+  } else {
     Result.PointerVal = ((char *)OperandValue.PointerVal) + Total;
     Result.Provenance = OperandValue.Provenance;
   }
@@ -1362,14 +1363,10 @@ static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type *Ty) {
 
   switch (Ty->getTypeID()) {
   case Type::FloatTyID: {
-    APFloat APVal = APFloat(Src1.FloatVal);
-    APVal.clearSign();
-    Dest.FloatVal = APVal.convertToFloat();
+    Dest.FloatVal = fabsf(Src1.FloatVal);
   } break;
   case Type::DoubleTyID: {
-    APFloat APVal = APFloat(Src1.DoubleVal);
-    APVal.clearSign();
-    Dest.DoubleVal = APVal.convertToDouble();
+    Dest.DoubleVal = fabs(Src1.DoubleVal);
   } break;
   case Type::IntegerTyID:
     Dest.IntVal = Src1.IntVal.abs();
@@ -1377,7 +1374,6 @@ static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type *Ty) {
   default:
     report_fatal_error("fabs intrinsic only supports float, double, or int");
   }
-
   return Dest;
 }
 
@@ -1389,13 +1385,13 @@ GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
     float FSrc1 = Src1.FloatVal;
     float FSrc2 = Src2.FloatVal;
     float FSrc3 = Src3.FloatVal;
-    Dest.FloatVal = FSrc1 * FSrc2 + FSrc3;
+    Dest.FloatVal = std::fmaf(FSrc1, FSrc2, FSrc3);
   } break;
   case Type::DoubleTyID: {
     double FSrc1 = Src1.DoubleVal;
     double FSrc2 = Src2.DoubleVal;
     double FSrc3 = Src3.DoubleVal;
-    Dest.DoubleVal = FSrc1 * FSrc2 + FSrc3;
+    Dest.DoubleVal = std::fma(FSrc1, FSrc2, FSrc3);
   } break;
   default: {
     report_fatal_error("fmuladd intrinsic only supports float and double");
@@ -1553,8 +1549,8 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
 
 void Interpreter::visitCallBase(CallBase &I) {
   if (I.isInlineAsm()) {
-    std::string Message =
-        "Inline assembly instruction not supported: " + std::string(I.getName());
+    std::string Message = "Inline assembly instruction not supported: " +
+                          std::string(I.getName());
     report_fatal_error(Message.data());
   }
   ExecutionContext &SF = Interpreter::context();
@@ -2196,12 +2192,12 @@ void Interpreter::visitVAArgInst(VAArgInst &I) {
   case Type::IntegerTyID:
     Dest.IntVal = Src.IntVal;
     break;
-  case Type::PointerTyID:    
+  case Type::PointerTyID:
     Dest.PointerVal = Src.PointerVal;
     Dest.Provenance = Src.Provenance;
     break;
-  IMPLEMENT_VAARG(Float);
-  IMPLEMENT_VAARG(Double);
+    IMPLEMENT_VAARG(Float);
+    IMPLEMENT_VAARG(Double);
   default:
     std::string Message =
         "Unhandled type for vaarg instruction: " + type_to_string(Ty);

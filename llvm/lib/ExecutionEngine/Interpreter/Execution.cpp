@@ -44,6 +44,7 @@ static cl::opt<bool> PrintVolatile(
 //===----------------------------------------------------------------------===//
 
 static void SetValue(Value *V, GenericValue Val, ExecutionContext &SF) {
+  Val.ValueTy = V->getType();
   SF.Values[V] = Val;
 }
 
@@ -1344,10 +1345,33 @@ void Interpreter::visitStoreInst(StoreInst &I) {
 
 void Interpreter::visitVAStartInst(VAStartInst &I) {
   ExecutionContext &SF = Interpreter::context();
-  GenericValue ArgIndex;
-  ArgIndex.UIntPairVal.first = Interpreter::stackSize() - 1;
-  ArgIndex.UIntPairVal.second = 0;
-  SetValue(&I, ArgIndex, SF);
+  Value *DestinationOperand = I.getOperand(0);
+  GenericValue Destination = getOperandValue(DestinationOperand, SF);
+  if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(Destination);
+    GenericValue ArgIndex;
+    ArgIndex.UIntPairVal.first = Interpreter::stackSize() - 1;
+    ArgIndex.UIntPairVal.second = 0;
+    // there are two possible options for how a va_list is represented
+    // for most systems, it's a pointer. for Unix x86_64, it's a
+    // struct containing two 32-bit integers and two pointers. {u32, u32, ptr,
+    // ptr} either way, we can guarantee that there's enough memory for a 64-bit
+    // word, which is the same width as the pointer argument to va_start.
+    Type *StoreType = DestinationOperand->getType();
+    if (auto *TETy = dyn_cast<TargetExtType>(StoreType))
+      StoreType = TETy->getLayoutType();
+
+    const unsigned StoreBytes = getDataLayout().getTypeStoreSize(StoreType);
+    uint64_t StoreAlign = getDataLayout().getABITypeAlign(StoreType).value();
+    bool status = Interpreter::ExecutionEngine::StoreToMiriMemory(
+        &ArgIndex, MiriPointerVal, StoreType, StoreBytes, StoreAlign);
+    if (status) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+  } else {
+    report_fatal_error("Miri isn't initialized.");
+  }
 }
 
 void Interpreter::visitVAEndInst(VAEndInst &I) {
@@ -1356,8 +1380,49 @@ void Interpreter::visitVAEndInst(VAEndInst &I) {
 
 void Interpreter::visitVACopyInst(VACopyInst &I) {
   ExecutionContext &SF = Interpreter::context();
-  SetValue(&I, getOperandValue(*I.arg_begin(), SF), SF);
+  Value *DestValue = I.getOperand(0);
+  Value *SourceValue = I.getOperand(1);
+
+  GenericValue Dest = getOperandValue(DestValue, SF);
+  GenericValue Src = getOperandValue(SourceValue, SF);
+  if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer DestMiriPointerVal = GVTOMiriPointer(Dest);
+    MiriPointer SrcMiriPointerVal = GVTOMiriPointer(Src);
+    // there are two possible options for how a va_list is represented
+    // for most systems, it's a pointer. for Unix x86_64, it's a
+    // struct containing two 32-bit integers and two pointers. {u32, u32, ptr,
+    // ptr} either way, we can guarantee that there's enough memory for a 64-bit
+    // word, which is the same width as the pointer argument to va_start.
+    Type *OpaquePointerType = DestValue->getType();
+    if (auto *TETy = dyn_cast<TargetExtType>(OpaquePointerType))
+      OpaquePointerType = TETy->getLayoutType();
+
+    const unsigned OpaquePointerBytes =
+        getDataLayout().getTypeStoreSize(OpaquePointerType);
+    uint64_t OpaquePointerAlign =
+        getDataLayout().getABITypeAlign(OpaquePointerType).value();
+    GenericValue SourceArgIndex;
+
+    bool LoadStatus = Interpreter::ExecutionEngine::LoadFromMiriMemory(
+        &SourceArgIndex, SrcMiriPointerVal, OpaquePointerType,
+        OpaquePointerBytes, OpaquePointerAlign);
+
+    if (LoadStatus) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+    bool StoreStatus = Interpreter::ExecutionEngine::StoreToMiriMemory(
+        &SourceArgIndex, DestMiriPointerVal, OpaquePointerType,
+        OpaquePointerBytes, OpaquePointerAlign);
+    if (StoreStatus) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+  } else {
+    report_fatal_error("Miri isn't initialized.");
+  }
 }
+
 static GenericValue executeIntrinsicFabsInst(GenericValue Src1, Type *Ty) {
   GenericValue Dest;
 
@@ -1800,7 +1865,6 @@ GenericValue Interpreter::executeFPToUIInst(Value *SrcVal, Type *DstTy,
     // scalar
     uint32_t DBitWidth = cast<IntegerType>(DstTy)->getBitWidth();
     assert(SrcTy->isFloatingPointTy() && "Invalid FPToUI instruction");
-
     if (SrcTy->getTypeID() == Type::FloatTyID)
       Dest.IntVal = APIntOps::RoundFloatToAPInt(Src.FloatVal, DBitWidth);
     else {
@@ -2180,35 +2244,88 @@ void Interpreter::visitBitCastInst(BitCastInst &I) {
 void Interpreter::visitVAArgInst(VAArgInst &I) {
   ExecutionContext &SF = Interpreter::context();
 
-  // Get the incoming valist parameter.  LLI treats the valist as a
-  // (ec-stack-depth var-arg-index) pair.
-  GenericValue VAList = getOperandValue(I.getOperand(0), SF);
+  Value *VAOperand = I.getOperand(0);
+  GenericValue VASrc = getOperandValue(VAOperand, SF);
   GenericValue Dest;
 
-  GenericValue Src = Interpreter::currentStack()[VAList.UIntPairVal.first]
-                         .VarArgs[VAList.UIntPairVal.second];
-  Type *Ty = I.getType();
-  switch (Ty->getTypeID()) {
-  case Type::IntegerTyID:
-    Dest.IntVal = Src.IntVal;
-    break;
-  case Type::PointerTyID:
-    Dest.PointerVal = Src.PointerVal;
-    Dest.Provenance = Src.Provenance;
-    break;
-    IMPLEMENT_VAARG(Float);
-    IMPLEMENT_VAARG(Double);
-  default:
-    std::string Message =
-        "Unhandled type for vaarg instruction: " + type_to_string(Ty);
-    report_fatal_error(Message.c_str());
+  if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer VASrcMiriPointerVal = GVTOMiriPointer(VASrc);
+
+    Type *OpaquePointerType = VAOperand->getType();
+    if (auto *TETy = dyn_cast<TargetExtType>(OpaquePointerType))
+      OpaquePointerType = TETy->getLayoutType();
+
+    const unsigned OpaquePointerBytes =
+        getDataLayout().getTypeStoreSize(OpaquePointerType);
+    uint64_t OpaquePointerAlign =
+        getDataLayout().getABITypeAlign(OpaquePointerType).value();
+
+    GenericValue SourceArgIndex;
+    bool LoadStatus = Interpreter::ExecutionEngine::LoadFromMiriMemory(
+        &SourceArgIndex, VASrcMiriPointerVal, OpaquePointerType,
+        OpaquePointerBytes, OpaquePointerAlign);
+    if (LoadStatus) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+
+    uint64_t CurrentStackSize = Interpreter::currentStack().size();
+    if (SourceArgIndex.UIntPairVal.first >= CurrentStackSize) {
+      std::string Message = "Invalid va_list stack index " +
+                            std::to_string(SourceArgIndex.UIntPairVal.first) +
+                            " for stack size " +
+                            std::to_string(CurrentStackSize);
+      report_fatal_error(Message.c_str());
+    }
+
+    uint64_t CurrentVAArgListSize =
+        Interpreter::currentStack()[SourceArgIndex.UIntPairVal.first]
+            .VarArgs.size();
+    if (SourceArgIndex.UIntPairVal.second >= CurrentVAArgListSize) {
+      std::string Message = "Invalid va_list argument index " +
+                            std::to_string(SourceArgIndex.UIntPairVal.second) +
+                            " for argument list of size " +
+                            std::to_string(CurrentVAArgListSize);
+      report_fatal_error(Message.c_str());
+    }
+
+    GenericValue Src =
+        Interpreter::currentStack()[SourceArgIndex.UIntPairVal.first]
+            .VarArgs[SourceArgIndex.UIntPairVal.second];
+
+    Type *Ty = I.getType();
+    switch (Ty->getTypeID()) {
+    case Type::IntegerTyID:
+      Dest.IntVal = Src.IntVal;
+      break;
+    case Type::PointerTyID:
+      Dest.PointerVal = Src.PointerVal;
+      Dest.Provenance = Src.Provenance;
+      break;
+      IMPLEMENT_VAARG(Float);
+      IMPLEMENT_VAARG(Double);
+    default:
+      std::string Message =
+          "Unhandled type for vaarg instruction: " + type_to_string(Ty);
+      report_fatal_error(Message.c_str());
+    }
+
+    // Set the Value of this Instruction.
+    SetValue(&I, Dest, SF);
+
+    // Move the pointer to the next vararg.
+    ++SourceArgIndex.UIntPairVal.second;
+
+    bool StoreStatus = Interpreter::ExecutionEngine::StoreToMiriMemory(
+        &SourceArgIndex, VASrcMiriPointerVal, OpaquePointerType,
+        OpaquePointerBytes, OpaquePointerAlign);
+    if (StoreStatus) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+  } else {
+    report_fatal_error("Miri isn't initialized.");
   }
-
-  // Set the Value of this Instruction.
-  SetValue(&I, Dest, SF);
-
-  // Move the pointer to the next vararg.
-  ++VAList.UIntPairVal.second;
 }
 
 void Interpreter::visitExtractElementInst(ExtractElementInst &I) {
@@ -2552,18 +2669,21 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE,
 }
 
 GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {
+  GenericValue OperandValue;
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(V)) {
-    return getConstantExprValue(CE, SF);
+    OperandValue = getConstantExprValue(CE, SF);
   } else if (Constant *CPV = dyn_cast<Constant>(V)) {
-    return getConstantValue(CPV);
+    OperandValue = getConstantValue(CPV);
   } else if (GlobalValue *GV = dyn_cast<GlobalValue>(V)) {
     void *Addr = getPointerToGlobal(GV);
     MiriProvenance Prov = getProvenanceOfGlobalIfAvailable(Addr);
     MiriPointer Ptr = {(uint64_t)Addr, Prov};
-    return MiriPointerTOGV(Ptr);
+    OperandValue = MiriPointerTOGV(Ptr);
   } else {
-    return SF.Values[V];
+    OperandValue = SF.Values[V];
   }
+  OperandValue.ValueTy = V->getType();
+  return OperandValue;
 }
 
 //===----------------------------------------------------------------------===//

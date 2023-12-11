@@ -82,9 +82,9 @@ struct ExecutionContext {
   // Make this type move-only.
   ExecutionContext(ExecutionContext &&) = default;
   ExecutionContext &operator=(ExecutionContext &&RHS) = default;
-  Function *CurFunction;        // The currently executing function
-  BasicBlock *CurBB;            // The currently executing BB
-  Instruction * PreviousInst;
+  Function *CurFunction; // The currently executing function
+  BasicBlock *CurBB;     // The currently executing BB
+  Instruction *PreviousInst;
   BasicBlock::iterator CurInst; // The next instruction to execute
   CallBase *Caller;             // Holds the call that called subframes.
   bool MustResolvePendingReturn;
@@ -95,9 +95,9 @@ struct ExecutionContext {
   AllocaHolder Allocas;                   // Track memory allocated by alloca
   MiriAllocaHolder MiriAllocas;
   ExecutionContext(void *Wrapper, MiriFreeHook MiriFree)
-      : CurFunction(nullptr), CurBB(nullptr), PreviousInst(nullptr), CurInst(nullptr), Caller(nullptr),
-        MustResolvePendingReturn(false), AwaitingReturn(GenericValue(0)),
-        MiriAllocas(Wrapper, MiriFree) {}
+      : CurFunction(nullptr), CurBB(nullptr), PreviousInst(nullptr),
+        CurInst(nullptr), Caller(nullptr), MustResolvePendingReturn(false),
+        AwaitingReturn(GenericValue(0)), MiriAllocas(Wrapper, MiriFree) {}
 };
 
 class ExecutionThread {
@@ -180,9 +180,13 @@ public:
   void setExitValue(GenericValue Val) { getCurrentThread()->ExitValue = Val; }
 
   ArrayRef<GenericValue> createThreadContext(uint64_t ThreadID,
-                                             std::vector<GenericValue> Args) {
+                                             GenericValue **Args,
+                                             uint64_t NumArgs) {
     Threads[ThreadID] = ExecutionThread();
-    Threads[ThreadID].InitArgs = Args;
+    Threads[ThreadID].InitArgs.resize(NumArgs);
+    for (uint64_t i = 0; i < NumArgs; i++) {
+      Threads[ThreadID].InitArgs[i] = *Args[i];
+    }
     return Threads[ThreadID].InitArgs;
   }
 
@@ -195,7 +199,7 @@ public:
   ExecutionThread *getCurrentThread() {
     ExecutionThread *CurrThread = getThread(CurrentThreadID);
     if (CurrThread == nullptr) {
-      llvm_unreachable("Current thread not found");
+      report_fatal_error("Current thread not found");
     } else {
       return CurrThread;
     }
@@ -203,7 +207,7 @@ public:
 
   GenericValue getPendingReturnValue() {
     if (getCurrentThread()->ECStack.size() == 0) {
-      llvm_unreachable("Cannot resolve pending return value; stack is empty.");
+      report_fatal_error("Cannot resolve pending return value; stack is empty.");
     }
     return getCurrentThread()->ECStack.back().AwaitingReturn;
   }
@@ -238,7 +242,7 @@ public:
   void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
   void run(); // Execute instructions until nothing left to do
   void createThread(uint64_t NextThreadID, Function *F,
-                    std::vector<GenericValue> Args) override;
+                    GenericValue** Args, uint64_t NumArgs) override;
   bool stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue)
       override; // Execute a single instruction
   GenericValue *getThreadExitValueByID(uint64_t ThreadID) override;

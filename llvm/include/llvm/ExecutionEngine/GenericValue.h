@@ -22,6 +22,7 @@ namespace llvm {
 using PointerTy = void *;
 
 struct GenericValue {
+  llvm::Type *ValueTy = nullptr;
   struct IntPair {
     unsigned int first;
     unsigned int second;
@@ -46,10 +47,10 @@ struct GenericValue {
     Provenance = NULL_PROVENANCE;
   }
   explicit GenericValue(MiriPointer Meta)
-      : PointerVal((void *)(intptr_t)Meta.addr), IntVal(1, 0),
+      : ValueTy(nullptr), PointerVal((void *)(intptr_t)Meta.addr), IntVal(1, 0),
         Provenance(Meta.prov) {}
   explicit GenericValue(void *V)
-      : PointerVal(V), IntVal(1, 0), Provenance(NULL_PROVENANCE) {}
+      : ValueTy(nullptr), PointerVal(V), IntVal(1, 0), Provenance(NULL_PROVENANCE) {}
 };
 inline GenericValue MiriPointerTOGV(MiriPointer P) { return GenericValue(P); }
 inline GenericValue PTOGV(void *P) { return GenericValue(P); }

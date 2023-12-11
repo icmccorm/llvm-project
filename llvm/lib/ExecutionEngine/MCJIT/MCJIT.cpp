@@ -684,11 +684,11 @@ JITSymbol LinkingSymbolResolver::findSymbol(const std::string &Name) {
 void LinkingSymbolResolver::anchor() {}
 
 void MCJIT::createThread(uint64_t NextThreadID, Function *F,
-                                       std::vector<GenericValue> Args) {
+                         GenericValue **Args, uint64_t NumArgs) {
   report_fatal_error("MCJIT does not support simulated multithreading.");
 }
 
-bool MCJIT::stepThread(uint64_t ThreadID, GenericValue * PendingReturnValue) {
+bool MCJIT::stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue) {
   report_fatal_error("MCJIT does not support simulated multithreading.");
 }
 

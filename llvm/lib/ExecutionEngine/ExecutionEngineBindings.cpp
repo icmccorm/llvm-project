@@ -42,6 +42,7 @@ LLVMGenericValueRef LLVMCreateGenericValueOfInt(LLVMTypeRef Ty,
                                                 LLVMBool IsSigned) {
   GenericValue *GenVal = new GenericValue();
   GenVal->IntVal = APInt(unwrap<IntegerType>(Ty)->getBitWidth(), N, IsSigned);
+  GenVal->ValueTy = unwrap(Ty);
   return wrap(GenVal);
 }
 
@@ -100,6 +101,7 @@ LLVMGenericValueRef LLVMCreateGenericValueOfFloat(LLVMTypeRef TyRef, double N) {
   default:
     llvm_unreachable("LLVMGenericValueToFloat supports only float and double.");
   }
+  GenVal->ValueTy = unwrap(TyRef);
   return wrap(GenVal);
 }
 
@@ -165,6 +167,14 @@ double LLVMGenericValueToFloat(LLVMTypeRef TyRef, LLVMGenericValueRef GenVal) {
   default:
     llvm_unreachable("LLVMGenericValueToFloat supports only float and double.");
   }
+}
+
+LLVMTypeRef LLVMGenericValueGetTypeTag(LLVMGenericValueRef GenVal) {
+  return wrap(unwrap(GenVal)->ValueTy);
+}
+
+void LLVMGenericValueSetTypeTag(LLVMGenericValueRef GenVal, LLVMTypeRef Type) {
+  unwrap(GenVal)->ValueTy = unwrap(Type);
 }
 
 void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
@@ -400,7 +410,8 @@ void LLVMExecutionEngineSetMiriRegisterGlobalHook(
   unwrap(EE)->setMiriRegisterGlobalHook(GlobalHook);
 }
 
-void LLVMExecutionEngineInitializeConstructorDestructorLists(LLVMExecutionEngineRef EE) {
+void LLVMExecutionEngineInitializeConstructorDestructorLists(
+    LLVMExecutionEngineRef EE) {
   unwrap(EE)->initializeConstructorDestructorLists();
 }
 
@@ -414,14 +425,16 @@ uint64_t LLVMExecutionEngineGetDestructorCount(LLVMExecutionEngineRef EE) {
 
 LLVMValueRef LLVMExecutionEngineGetDestructorAtIndex(LLVMExecutionEngineRef EE,
                                                      uint64_t Index) {
-  if (Index
-    >= unwrap(EE)->Destructors.size()) { return NULL; }
+  if (Index >= unwrap(EE)->Destructors.size()) {
+    return NULL;
+  }
   return wrap(unwrap(EE)->Destructors.at(Index));
-} 
+}
 LLVMValueRef LLVMExecutionEngineGetConstructorAtIndex(LLVMExecutionEngineRef EE,
                                                       uint64_t Index) {
-  if (Index
-    >= unwrap(EE)->Constructors.size()) { return NULL; }
+  if (Index >= unwrap(EE)->Constructors.size()) {
+    return NULL;
+  }
   return wrap(unwrap(EE)->Constructors.at(Index));
 }
 
@@ -564,11 +577,7 @@ void LLVMExecutionEngineCreateThread(LLVMExecutionEngineRef EE,
                                      LLVMGenericValueRef *Args) {
   auto *ExecEngine = unwrap(EE);
   ExecEngine->finalizeObject();
-  std::vector<GenericValue> ArgVec;
-  ArgVec.reserve(NumArgs);
-  for (unsigned I = 0; I != NumArgs; ++I)
-    ArgVec.push_back(*unwrap(Args[I]));
-  ExecEngine->createThread(ThreadID, unwrap<Function>(F), ArgVec);
+  ExecEngine->createThread(ThreadID, unwrap<Function>(F), unwrap(Args), NumArgs);
 }
 
 LLVMBool LLVMExecutionEngineHasThread(LLVMExecutionEngineRef EE,

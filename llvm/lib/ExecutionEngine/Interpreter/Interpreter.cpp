@@ -67,16 +67,13 @@ void Interpreter::runAtExitHandlers() {
 }
 
 void Interpreter::createThread(uint64_t NextThreadID, Function *F,
-                               std::vector<GenericValue> Args) {
+                               GenericValue **Args, uint64_t NumArgs) {
   assert(F && "Function *F was null at entry to run()");
   ArrayRef<GenericValue> ArgsRef =
-      Interpreter::createThreadContext(NextThreadID, Args);
+      Interpreter::createThreadContext(NextThreadID, Args, NumArgs);
   uint64_t PrevThread = Interpreter::switchThread(NextThreadID);
-  const size_t ArgCount = F->getFunctionType()->getNumParams();
-  ArrayRef<GenericValue> ActualArgs =
-      ArgsRef.slice(0, std::min(ArgsRef.size(), ArgCount));
   // Set up the function call.
-  callFunction(F, ActualArgs);
+  callFunction(F, ArgsRef);
   Interpreter::switchThread(PrevThread);
 }
 

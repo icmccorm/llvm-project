@@ -441,9 +441,8 @@ void *ArgvArray::reset(LLVMContext &C, ExecutionEngine *EE,
   return Array.get();
 }
 
-void ExecutionEngine::initializeConstructorDestructorList(Module &module,
-                                         std::vector<Function *> &functionList,
-                                         bool isDtors) {
+void ExecutionEngine::initializeConstructorDestructorList(
+    Module &module, std::vector<Function *> &functionList, bool isDtors) {
   StringRef Name(isDtors ? "llvm.global_dtors" : "llvm.global_ctors");
   GlobalVariable *GV = module.getNamedGlobal(Name);
 
@@ -719,6 +718,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
   // If its undefined, return the garbage.
   if (isa<UndefValue>(C)) {
     GenericValue Result;
+    Result.ValueTy = C->getType();
     switch (C->getType()->getTypeID()) {
     default:
       break;
@@ -904,6 +904,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
         assert(DestTy->isPointerTy() && "Invalid bitcast");
         break; // getConstantValue(Op0)  above already converted it
       }
+      GV.ValueTy = DestTy;
       return GV;
     }
     case Instruction::Add:
@@ -922,6 +923,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       GenericValue LHS = getConstantValue(Op0);
       GenericValue RHS = getConstantValue(CE->getOperand(1));
       GenericValue GV;
+      GV.ValueTy = CE->getType();
       switch (CE->getOperand(0)->getType()->getTypeID()) {
       default:
         llvm_unreachable("Bad add type!");
@@ -1057,6 +1059,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
 
   // Otherwise, we have a simple constant.
   GenericValue Result;
+  Result.ValueTy = C->getType();
   switch (C->getType()->getTypeID()) {
   case Type::FloatTyID:
     Result.FloatVal = cast<ConstantFP>(C)->getValueAPF().convertToFloat();
@@ -1133,6 +1136,7 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
     if (ElemTy->isFloatTy()) {
       if (CAZ) {
         GenericValue floatZero;
+        floatZero.ValueTy = ElemTy;
         floatZero.FloatVal = 0.f;
         std::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
                   floatZero);
@@ -1140,17 +1144,20 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       }
       if (CV) {
         for (unsigned i = 0; i < elemNum; ++i)
-          if (!isa<UndefValue>(CV->getOperand(i)))
+          if (!isa<UndefValue>(CV->getOperand(i))) {
+            Result.AggregateVal[i].ValueTy = ElemTy;
             Result.AggregateVal[i].FloatVal =
                 cast<ConstantFP>(CV->getOperand(i))
                     ->getValueAPF()
                     .convertToFloat();
+          }
         break;
       }
       if (CDV)
-        for (unsigned i = 0; i < elemNum; ++i)
+        for (unsigned i = 0; i < elemNum; ++i) {
+          Result.AggregateVal[i].ValueTy = ElemTy;
           Result.AggregateVal[i].FloatVal = CDV->getElementAsFloat(i);
-
+        }
       break;
     }
     // Check if vector holds doubles.
@@ -1158,36 +1165,41 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
       if (CAZ) {
         GenericValue doubleZero;
         doubleZero.DoubleVal = 0.0;
+        doubleZero.ValueTy = ElemTy;
         std::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
                   doubleZero);
         break;
       }
       if (CV) {
         for (unsigned i = 0; i < elemNum; ++i)
-          if (!isa<UndefValue>(CV->getOperand(i)))
+          if (!isa<UndefValue>(CV->getOperand(i))) {
+            Result.AggregateVal[i].ValueTy = ElemTy;
             Result.AggregateVal[i].DoubleVal =
                 cast<ConstantFP>(CV->getOperand(i))
                     ->getValueAPF()
                     .convertToDouble();
+          }
         break;
       }
       if (CDV)
-        for (unsigned i = 0; i < elemNum; ++i)
+        for (unsigned i = 0; i < elemNum; ++i) {
+          Result.AggregateVal[i].ValueTy = ElemTy;
           Result.AggregateVal[i].DoubleVal = CDV->getElementAsDouble(i);
-
+        }
       break;
     }
     // Check if vector holds integers.
     if (ElemTy->isIntegerTy()) {
       if (CAZ) {
         GenericValue intZero;
+        intZero.ValueTy = ElemTy;
         intZero.IntVal = APInt(ElemTy->getScalarSizeInBits(), 0ull);
         std::fill(Result.AggregateVal.begin(), Result.AggregateVal.end(),
                   intZero);
         break;
       }
       if (CV) {
-        for (unsigned i = 0; i < elemNum; ++i)
+        for (unsigned i = 0; i < elemNum; ++i) {
           if (!isa<UndefValue>(CV->getOperand(i)))
             Result.AggregateVal[i].IntVal =
                 cast<ConstantInt>(CV->getOperand(i))->getValue();
@@ -1195,14 +1207,17 @@ GenericValue ExecutionEngine::getConstantValue(const Constant *C) {
             Result.AggregateVal[i].IntVal = APInt(
                 CV->getOperand(i)->getType()->getPrimitiveSizeInBits(), 0);
           }
+          Result.AggregateVal[i].ValueTy = ElemTy;
+        }
         break;
       }
       if (CDV)
-        for (unsigned i = 0; i < elemNum; ++i)
+        for (unsigned i = 0; i < elemNum; ++i) {
           Result.AggregateVal[i].IntVal =
               APInt(CDV->getElementType()->getPrimitiveSizeInBits(),
                     CDV->getElementAsInteger(i));
-
+          Result.AggregateVal[i].ValueTy = ElemTy;
+        }
       break;
     }
     llvm_unreachable("Unknown constant pointer type!");

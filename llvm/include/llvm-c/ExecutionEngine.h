@@ -98,7 +98,11 @@ APIntPointer LLVMGenericValueToInt(LLVMGenericValueRef GenVal);
 
 void LLVMGenericValueSetMiriPointerValue(LLVMGenericValueRef GenVal,
                                          MiriPointer Ptr); 
-                                         
+
+LLVMTypeRef LLVMGenericValueGetTypeTag(LLVMGenericValueRef GenVal);
+
+void LLVMGenericValueSetTypeTag(LLVMGenericValueRef GenVal, LLVMTypeRef Type);
+
 void LLVMExecutionEngineInitializeConstructorDestructorLists(LLVMExecutionEngineRef EE);
 
 uint64_t LLVMExecutionEngineGetConstructorCount(LLVMExecutionEngineRef EE);

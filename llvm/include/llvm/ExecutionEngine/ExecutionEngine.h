@@ -36,9 +36,9 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-#include <optional>
 
 namespace llvm {
 
@@ -55,6 +55,16 @@ class Triple;
 class Type;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(GenericValue, LLVMGenericValueRef)
+
+inline GenericValue **unwrap(LLVMGenericValueRef *Gvr) {
+  return reinterpret_cast<GenericValue **>(Gvr);
+}
+
+inline LLVMGenericValueRef *wrap(GenericValue **Gvr) {
+  return reinterpret_cast<LLVMGenericValueRef *>(
+      const_cast<GenericValue **>(Gvr));
+}
+
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ArrayRef<GenericValue>,
                                    LLVMGenericValueArrayRef)
 
@@ -320,9 +330,8 @@ public:
   /// Returns the most recent error message.
   const std::string &getErrorMessage() const { return ErrMsg; }
 
-  void initializeConstructorDestructorList(Module &module,
-                                          std::vector<Function *> &functionList,
-                                          bool isDtors);
+  void initializeConstructorDestructorList(
+      Module &module, std::vector<Function *> &functionList, bool isDtors);
 
   void initializeConstructorDestructorLists();
   /// runStaticConstructorsDestructors - This method is used to execute all of
@@ -614,7 +623,7 @@ public:
   }
 
   virtual void createThread(uint64_t NextThreadID, Function *F,
-                            std::vector<GenericValue> Args) = 0;
+                            GenericValue **Args, uint64_t NumArgs) = 0;
 
   virtual bool stepThread(
       uint64_t ThreadID,

@@ -1292,6 +1292,7 @@ void ExecutionEngine::StoreValueToMemory(const GenericValue &Val,
 bool ExecutionEngine::LoadFromMiriMemory(GenericValue *Dest, MiriPointer Source,
                                          Type *DestTy, const unsigned LoadBytes,
                                          uint64_t LoadAlignment) {
+  Dest->ValueTy = DestTy;
   LLVMGenericValueRef DestRef = wrap(Dest);
   LLVMTypeRef DestTyRef = wrap(DestTy);
   return ExecutionEngine::MiriLoad(ExecutionEngine::MiriWrapper, DestRef,

@@ -69,6 +69,13 @@ void Interpreter::runAtExitHandlers() {
 void Interpreter::createThread(uint64_t NextThreadID, Function *F,
                                GenericValue **Args, uint64_t NumArgs) {
   assert(F && "Function *F was null at entry to run()");
+  uint64_t NumArgsExpected = F->getFunctionType()->getNumParams();
+  if (NumArgs < NumArgsExpected ||
+      (!F->isVarArg() && NumArgs > NumArgsExpected)) {
+    std::string Message = "Incorrect number of arguments passed to function " +
+                          std::string(F->getName());
+    report_fatal_error(Message.data());
+  }
   ArrayRef<GenericValue> ArgsRef =
       Interpreter::createThreadContext(NextThreadID, Args, NumArgs);
   uint64_t PrevThread = Interpreter::switchThread(NextThreadID);

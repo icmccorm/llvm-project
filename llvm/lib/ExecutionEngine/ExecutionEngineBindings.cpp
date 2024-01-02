@@ -125,6 +125,13 @@ LLVMGenericValueRef LLVMCreateGenericValueOfData(const uint8_t *Data,
   return wrap(GenVal);
 }
 
+void LLVMGenericValueSetDataValue(LLVMGenericValueRef GenVal, const uint8_t *Data,
+                                 uint32_t Len) {
+  GenericValue *GenValInner = unwrap(GenVal);
+  GenValInner->IntVal = APInt(8 * Len, 0);
+  LoadIntFromMemory(GenValInner->IntVal, Data, Len);
+}
+
 LLVMGenericValueRef
 LLVMGenericValueArrayRefGetElementAt(LLVMGenericValueArrayRef GenArray,
                                      uint64_t Index) {

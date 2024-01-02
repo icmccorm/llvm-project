@@ -52,6 +52,9 @@ struct LLVMMCJITCompilerOptions {
 LLVMGenericValueRef LLVMCreateGenericValueOfData(const uint8_t *Data,
                                                  uint32_t Len);
 
+void LLVMGenericValueSetDataValue(LLVMGenericValueRef GenVal, const uint8_t *Data,
+                                 uint32_t Len);
+
 LLVMGenericValueRef LLVMCreateGenericValueOfInt(LLVMTypeRef Ty,
                                                 unsigned long long N,
                                                 LLVMBool IsSigned);

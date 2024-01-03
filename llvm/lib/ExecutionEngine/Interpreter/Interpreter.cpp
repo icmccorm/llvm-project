@@ -106,7 +106,7 @@ bool Interpreter::stepThread(uint64_t ThreadID,
       SwitchToNewBasicBlock(II->getNormalDest(), CallingSF);
     CallingSF.Caller = nullptr; // We returned from the call...
   } else {
-    if (PendingReturnValue == nullptr) {
+    if (PendingReturnValue != nullptr) {
       report_fatal_error("Unexpectedly received a pending return value.");
     }
   }

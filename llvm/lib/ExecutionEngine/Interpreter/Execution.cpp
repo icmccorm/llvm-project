@@ -1464,7 +1464,7 @@ GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
   }
   return Dest;
 }
-/*
+
 GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
                                                 GenericValue Src3, bool isLeft)
 { GenericValue Dest;
@@ -1491,24 +1491,14 @@ Src2, GenericValue Src3, Type* Ty, bool isLeft) {
 
   // the operands are vectors
   if (Ty->isVectorTy()) {
-    assert(Src1.AggregateVal.size() == Src2.AggregateVal.size());
-    assert(Src2.AggregateVal.size() == Src3.AggregateVal.size());
-
-    Dest.AggregateVal.resize(Src1.AggregateVal.size());
-    for (size_t i = 0; i < Src1.AggregateVal.size(); i++) {
-      // Somehow we'd like to assert the inner type of this vector is an integer
-      Dest.AggregateVal[i] = executeIntrinsicFshIntInst(Src1.AggregateVal[i],
-Src2.AggregateVal[i], Src3.AggregateVal[i], isLeft);
-    }
-
+    report_fatal_error("funnel shift intrinsics do not support vectors yet.");
   } else {
     assert(Ty->isIntegerTy());
     Dest = executeIntrinsicFshIntInst(Src1, Src2, Src3, isLeft);
   }
-
   return Dest;
 }
-*/
+
 void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
   ExecutionContext &SF = Interpreter::context();
 
@@ -1550,7 +1540,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     SetValue(&I, R, SF);
     return;
   }
-  /*
+
   case Intrinsic::fshl: {
     Type *Ty1 = I.getOperand(0)->getType();
     Type *Ty2 = I.getOperand(1)->getType();
@@ -1585,7 +1575,7 @@ void Interpreter::visitIntrinsicInst(IntrinsicInst &I) {
     ++SF.CurInst;
     return;
   }
-*/
+
   case Intrinsic::fabs: {
     Type *Ty = I.getOperand(0)->getType();
     GenericValue Src1 = getOperandValue(I.getOperand(0), SF);

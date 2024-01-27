@@ -1284,16 +1284,22 @@ void Interpreter::visitGetElementPtrInst(GetElementPtrInst &I) {
 }
 
 void Interpreter::visitLoadInst(LoadInst &I) {
+
   ExecutionContext &SF = Interpreter::context();
   GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
   GenericValue Result;
-  MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
-  if (ExecutionEngine::miriIsInitialized()) {
+
+  Type *LoadType = I.getType();
+  if (auto *TETy = dyn_cast<TargetExtType>(LoadType))
+    LoadType = TETy->getLayoutType();
+
+  if (SRC.PointerVal == stdin) {
+    ExecutionEngine::LoadValueFromMemory(Result, &SRC, LoadType);
+  } else if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
     LLVM_DEBUG(dbgs() << "Loading value from Miri memory, address: "
                       << MiriPointerVal.addr << " ");
-    Type *LoadType = I.getType();
-    if (auto *TETy = dyn_cast<TargetExtType>(LoadType))
-      LoadType = TETy->getLayoutType();
+
     const unsigned LoadBytes = getDataLayout().getTypeStoreSize(LoadType);
     uint64_t LoadAlign = getDataLayout().getABITypeAlign(LoadType).value();
     bool status = Interpreter::ExecutionEngine::LoadFromMiriMemory(
@@ -1315,17 +1321,20 @@ void Interpreter::visitStoreInst(StoreInst &I) {
   GenericValue Val = getOperandValue(I.getOperand(0), SF);
   GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
 
-  MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
+  Type *StoreType = I.getOperand(0)->getType();
+  if (auto *TETy = dyn_cast<TargetExtType>(StoreType))
+    StoreType = TETy->getLayoutType();
 
-  if (ExecutionEngine::miriIsInitialized()) {
+  if (SRC.PointerVal == stdout) {
+    ExecutionEngine::StoreValueToMemory(Val, &SRC, StoreType);
+  } else if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
+
     LLVM_DEBUG(dbgs() << "Storing value to Miri memory, address: "
                       << MiriPointerVal.addr << " ");
-    Type *StoreType = I.getOperand(0)->getType();
-    if (auto *TETy = dyn_cast<TargetExtType>(StoreType))
-      StoreType = TETy->getLayoutType();
+
     const unsigned StoreBytes = getDataLayout().getTypeStoreSize(StoreType);
     uint64_t StoreAlign = getDataLayout().getABITypeAlign(StoreType).value();
-
     bool status = Interpreter::ExecutionEngine::StoreToMiriMemory(
         &Val, MiriPointerVal, StoreType, StoreBytes, StoreAlign);
     if (status) {
@@ -1466,14 +1475,14 @@ GenericValue executeIntrinsicFmuladdInst(GenericValue Src1, GenericValue Src2,
 }
 
 GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
-                                                GenericValue Src3, bool isLeft)
-{ GenericValue Dest;
+                                        GenericValue Src3, bool isLeft) {
+  GenericValue Dest;
 
   assert(Src1.IntVal.getBitWidth() == Src2.IntVal.getBitWidth());
   assert(Src2.IntVal.getBitWidth() == Src3.IntVal.getBitWidth());
 
   unsigned bitWidth = Src1.IntVal.getBitWidth();
-  APInt concat = Src1.IntVal <<=  bitWidth | Src2.IntVal;
+  APInt concat = Src1.IntVal <<= bitWidth | Src2.IntVal;
 
   if (isLeft) {
     Dest.IntVal = concat.rotl(Src3.IntVal);
@@ -1484,8 +1493,10 @@ GenericValue executeIntrinsicFshIntInst(GenericValue Src1, GenericValue Src2,
   return Dest;
 }
 
-static GenericValue executeIntrinsicFshInst(GenericValue Src1, GenericValue
-Src2, GenericValue Src3, Type* Ty, bool isLeft) {
+static GenericValue executeIntrinsicFshInst(GenericValue Src1,
+                                            GenericValue Src2,
+                                            GenericValue Src3, Type *Ty,
+                                            bool isLeft) {
 
   GenericValue Dest;
 

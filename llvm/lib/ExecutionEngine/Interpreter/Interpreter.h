@@ -207,7 +207,8 @@ public:
 
   GenericValue getPendingReturnValue() {
     if (getCurrentThread()->ECStack.size() == 0) {
-      report_fatal_error("Cannot resolve pending return value; stack is empty.");
+      report_fatal_error(
+          "Cannot resolve pending return value; stack is empty.");
     }
     return getCurrentThread()->ECStack.back().AwaitingReturn;
   }
@@ -241,8 +242,8 @@ public:
   // Place a call on the stack
   void callFunction(Function *F, ArrayRef<GenericValue> ArgVals);
   void run(); // Execute instructions until nothing left to do
-  void createThread(uint64_t NextThreadID, Function *F,
-                    GenericValue** Args, uint64_t NumArgs) override;
+  void createThread(uint64_t NextThreadID, Function *F, GenericValue **Args,
+                    uint64_t NumArgs) override;
   bool stepThread(uint64_t ThreadID, GenericValue *PendingReturnValue)
       override; // Execute a single instruction
   GenericValue *getThreadExitValueByID(uint64_t ThreadID) override;
@@ -335,6 +336,8 @@ private: // Helper functions
   void initializeExecutionEngine() {}
   // void initializeExternalFunctions();
   GenericValue getConstantExprValue(ConstantExpr *CE, ExecutionContext &SF);
+  bool getOperandValueOverride(Value *V, GenericValue *Dest,
+                               const char *OverrideName, void *OverrideValue);
   GenericValue getOperandValue(Value *V, ExecutionContext &SF);
   GenericValue executeTruncInst(Value *SrcVal, Type *DstTy,
                                 ExecutionContext &SF);

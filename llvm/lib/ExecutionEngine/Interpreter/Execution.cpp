@@ -1287,22 +1287,18 @@ void Interpreter::visitLoadInst(LoadInst &I) {
 
   ExecutionContext &SF = Interpreter::context();
   GenericValue Result;
+  GenericValue SRC;
 
   Type *LoadType = I.getType();
   if (auto *TETy = dyn_cast<TargetExtType>(LoadType))
     LoadType = TETy->getLayoutType();
 
-  if (GlobalValue *GV = dyn_cast<GlobalValue>(I.getPointerOperand())) {
-    if (GV->getName() == "stdin") {
-      GenericValue SRC = PTOGV(stdin);
-      ExecutionEngine::LoadValueFromMemory(Result, &SRC, LoadType);
-      SetValue(&I, Result, SF);
-      return;
-    }
-  }
+  bool ShouldOverride = Interpreter::getOperandValueOverride(
+      I.getPointerOperand(), &SRC, "stdin", stdin);
 
-  if (ExecutionEngine::miriIsInitialized()) {
-    GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
+  if (ShouldOverride) {
+    ExecutionEngine::LoadValueFromMemory(Result, &SRC, LoadType);
+  } else if (ExecutionEngine::miriIsInitialized()) {
     MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
     LLVM_DEBUG(dbgs() << "Loading value from Miri memory, address: "
                       << MiriPointerVal.addr << " ");
@@ -1315,33 +1311,29 @@ void Interpreter::visitLoadInst(LoadInst &I) {
       Interpreter::registerMiriError(I);
       return;
     }
-    SetValue(&I, Result, SF);
-    if (I.isVolatile() && PrintVolatile)
-      dbgs() << "Volatile load " << I;
   } else {
     report_fatal_error("Miri isn't initialized.");
   }
+  SetValue(&I, Result, SF);
+  if (I.isVolatile() && PrintVolatile)
+    dbgs() << "Volatile load " << I;
 }
 
 void Interpreter::visitStoreInst(StoreInst &I) {
   ExecutionContext &SF = Interpreter::context();
   GenericValue Val = getOperandValue(I.getOperand(0), SF);
-
+  GenericValue DEST;
   Type *StoreType = I.getOperand(0)->getType();
   if (auto *TETy = dyn_cast<TargetExtType>(StoreType))
     StoreType = TETy->getLayoutType();
 
-  if (GlobalValue *GV = dyn_cast<GlobalValue>(I.getPointerOperand())) {
-    if (GV->getName() == "stdout") {
-      GenericValue SRC = PTOGV(stdout);
-      ExecutionEngine::StoreValueToMemory(Val, &SRC, StoreType);
-      return;
-    }
-  }
+  bool ShouldOverride = Interpreter::getOperandValueOverride(
+      I.getPointerOperand(), &DEST, "stdout", stdout);
 
-  if (ExecutionEngine::miriIsInitialized()) {
-    GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
-    MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
+  if (ShouldOverride) {
+    ExecutionEngine::StoreValueToMemory(Val, &DEST, StoreType);
+  } else if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(DEST);
 
     LLVM_DEBUG(dbgs() << "Storing value to Miri memory, address: "
                       << MiriPointerVal.addr << " ");
@@ -1377,8 +1369,9 @@ void Interpreter::visitVAStartInst(VAStartInst &I) {
     // there are two possible options for how a va_list is represented
     // for most systems, it's a pointer. for Unix x86_64, it's a
     // struct containing two 32-bit integers and two pointers. {u32, u32, ptr,
-    // ptr} either way, we can guarantee that there's enough memory for a 64-bit
-    // word, which is the same width as the pointer argument to va_start.
+    // ptr} either way, we can guarantee that there's enough memory for a
+    // 64-bit word, which is the same width as the pointer argument to
+    // va_start.
     Type *StoreType = DestinationOperand->getType();
     if (auto *TETy = dyn_cast<TargetExtType>(StoreType))
       StoreType = TETy->getLayoutType();
@@ -1413,8 +1406,9 @@ void Interpreter::visitVACopyInst(VACopyInst &I) {
     // there are two possible options for how a va_list is represented
     // for most systems, it's a pointer. for Unix x86_64, it's a
     // struct containing two 32-bit integers and two pointers. {u32, u32, ptr,
-    // ptr} either way, we can guarantee that there's enough memory for a 64-bit
-    // word, which is the same width as the pointer argument to va_start.
+    // ptr} either way, we can guarantee that there's enough memory for a
+    // 64-bit word, which is the same width as the pointer argument to
+    // va_start.
     Type *OpaquePointerType = DestValue->getType();
     if (auto *TETy = dyn_cast<TargetExtType>(OpaquePointerType))
       OpaquePointerType = TETy->getLayoutType();
@@ -2680,6 +2674,20 @@ GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE,
     report_fatal_error("Unhandled ConstantExpr");
   }
   return Dest;
+}
+
+bool Interpreter::getOperandValueOverride(Value *V, GenericValue *Dest,
+                                          const char *OverrideName,
+                                          void *OverrideValue) {
+  ExecutionContext &SF = Interpreter::context();
+  if (GlobalValue *GV = dyn_cast<GlobalValue>(V)) {
+    if (GV->getName().compare(OverrideName) == 0) {
+      *Dest = PTOGV(OverrideValue);
+      return true;
+    }
+  }
+  *Dest = getOperandValue(V, SF);
+  return Dest->PointerVal == OverrideValue;
 }
 
 GenericValue Interpreter::getOperandValue(Value *V, ExecutionContext &SF) {

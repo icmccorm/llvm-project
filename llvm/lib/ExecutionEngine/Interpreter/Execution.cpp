@@ -1286,16 +1286,23 @@ void Interpreter::visitGetElementPtrInst(GetElementPtrInst &I) {
 void Interpreter::visitLoadInst(LoadInst &I) {
 
   ExecutionContext &SF = Interpreter::context();
-  GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
   GenericValue Result;
 
   Type *LoadType = I.getType();
   if (auto *TETy = dyn_cast<TargetExtType>(LoadType))
     LoadType = TETy->getLayoutType();
 
-  if (SRC.PointerVal == stdin) {
-    ExecutionEngine::LoadValueFromMemory(Result, &SRC, LoadType);
-  } else if (ExecutionEngine::miriIsInitialized()) {
+  if (GlobalValue *GV = dyn_cast<GlobalValue>(I.getPointerOperand())) {
+    if (GV->getName() == "stdin") {
+      GenericValue SRC = PTOGV(stdin);
+      ExecutionEngine::LoadValueFromMemory(Result, &SRC, LoadType);
+      SetValue(&I, Result, SF);
+      return;
+    }
+  }
+
+  if (ExecutionEngine::miriIsInitialized()) {
+    GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
     MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
     LLVM_DEBUG(dbgs() << "Loading value from Miri memory, address: "
                       << MiriPointerVal.addr << " ");
@@ -1308,26 +1315,32 @@ void Interpreter::visitLoadInst(LoadInst &I) {
       Interpreter::registerMiriError(I);
       return;
     }
+    SetValue(&I, Result, SF);
+    if (I.isVolatile() && PrintVolatile)
+      dbgs() << "Volatile load " << I;
   } else {
     report_fatal_error("Miri isn't initialized.");
   }
-  SetValue(&I, Result, SF);
-  if (I.isVolatile() && PrintVolatile)
-    dbgs() << "Volatile load " << I;
 }
 
 void Interpreter::visitStoreInst(StoreInst &I) {
   ExecutionContext &SF = Interpreter::context();
   GenericValue Val = getOperandValue(I.getOperand(0), SF);
-  GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
 
   Type *StoreType = I.getOperand(0)->getType();
   if (auto *TETy = dyn_cast<TargetExtType>(StoreType))
     StoreType = TETy->getLayoutType();
 
-  if (SRC.PointerVal == stdout) {
-    ExecutionEngine::StoreValueToMemory(Val, &SRC, StoreType);
-  } else if (ExecutionEngine::miriIsInitialized()) {
+  if (GlobalValue *GV = dyn_cast<GlobalValue>(I.getPointerOperand())) {
+    if (GV->getName() == "stdout") {
+      GenericValue SRC = PTOGV(stdout);
+      ExecutionEngine::StoreValueToMemory(Val, &SRC, StoreType);
+      return;
+    }
+  }
+
+  if (ExecutionEngine::miriIsInitialized()) {
+    GenericValue SRC = getOperandValue(I.getPointerOperand(), SF);
     MiriPointer MiriPointerVal = GVTOMiriPointer(SRC);
 
     LLVM_DEBUG(dbgs() << "Storing value to Miri memory, address: "

@@ -15,7 +15,8 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
-
+#include <iostream>
+using namespace std;
 namespace llvm {
 
 // We operate on opaque instruction classes, so forward declare all instruction

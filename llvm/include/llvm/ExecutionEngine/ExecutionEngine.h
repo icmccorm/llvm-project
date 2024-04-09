@@ -662,7 +662,7 @@ private:
   std::unique_ptr<Module> M;
   EngineKind::Kind WhichEngine;
   std::string *ErrorStr;
-  CodeGenOpt::Level OptLevel;
+  CodeGenOptLevel OptLevel;
   std::shared_ptr<MCJITMemoryManager> MemMgr;
   std::shared_ptr<LegacyJITSymbolResolver> Resolver;
   TargetOptions Options;
@@ -693,14 +693,14 @@ public:
 
   /// setMCJITMemoryManager - Sets the MCJIT memory manager to use. This allows
   /// clients to customize their memory allocation policies for the MCJIT. This
-  /// is only appropriate for the MCJIT; setting this and configuring the
-  /// builder to create anything other than MCJIT will cause a runtime error. If
-  /// create() is called and is successful, the created engine takes ownership
-  /// of the memory manager. This option defaults to NULL.
-  EngineBuilder &
-  setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager> mcjmm);
+  /// is only appropriate for the MCJIT; setting this and configuring the builder
+  /// to create anything other than MCJIT will cause a runtime error. If create()
+  /// is called and is successful, the created engine takes ownership of the
+  /// memory manager. This option defaults to NULL.
+  EngineBuilder &setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager> mcjmm);
 
-  EngineBuilder &setMemoryManager(std::unique_ptr<MCJITMemoryManager> MM);
+  EngineBuilder&
+  setMemoryManager(std::unique_ptr<MCJITMemoryManager> MM);
 
   EngineBuilder &setSymbolResolver(std::unique_ptr<LegacyJITSymbolResolver> SR);
 
@@ -712,8 +712,8 @@ public:
   }
 
   /// setOptLevel - Set the optimization level for the JIT.  This option
-  /// defaults to CodeGenOpt::Default.
-  EngineBuilder &setOptLevel(CodeGenOpt::Level l) {
+  /// defaults to CodeGenOptLevel::Default.
+  EngineBuilder &setOptLevel(CodeGenOptLevel l) {
     OptLevel = l;
     return *this;
   }
@@ -760,24 +760,29 @@ public:
   }
 
   /// setMAttrs - Set cpu-specific attributes.
-  template <typename StringSequence>
+  template<typename StringSequence>
   EngineBuilder &setMAttrs(const StringSequence &mattrs) {
     MAttrs.clear();
     MAttrs.append(mattrs.begin(), mattrs.end());
     return *this;
   }
 
-  void setEmulatedTLS(bool EmulatedTLS) { this->EmulatedTLS = EmulatedTLS; }
+  void setEmulatedTLS(bool EmulatedTLS) {
+    this->EmulatedTLS = EmulatedTLS;
+  }
 
   TargetMachine *selectTarget();
 
   /// selectTarget - Pick a target either via -march or by guessing the native
   /// arch.  Add any CPU features specified via -mcpu or -mattr.
-  TargetMachine *selectTarget(const Triple &TargetTriple, StringRef MArch,
+  TargetMachine *selectTarget(const Triple &TargetTriple,
+                              StringRef MArch,
                               StringRef MCPU,
-                              const SmallVectorImpl<std::string> &MAttrs);
+                              const SmallVectorImpl<std::string>& MAttrs);
 
-  ExecutionEngine *create() { return create(selectTarget()); }
+  ExecutionEngine *create() {
+    return create(selectTarget());
+  }
 
   ExecutionEngine *create(TargetMachine *TM);
 };

@@ -249,7 +249,7 @@ LLVMBool LLVMCreateJITCompilerForModule(LLVMExecutionEngineRef *OutJIT,
   EngineBuilder builder(std::unique_ptr<Module>(unwrap(M)));
   builder.setEngineKind(EngineKind::JIT)
       .setErrorStr(&Error)
-      .setOptLevel((CodeGenOpt::Level)OptLevel);
+      .setOptLevel((CodeGenOptLevel)OptLevel);
   if (ExecutionEngine *JIT = builder.create()) {
     *OutJIT = wrap(JIT);
     return 0;
@@ -308,7 +308,7 @@ LLVMCreateMCJITCompilerForModule(LLVMExecutionEngineRef *OutJIT,
   EngineBuilder builder(std::move(Mod));
   builder.setEngineKind(EngineKind::JIT)
       .setErrorStr(&Error)
-      .setOptLevel((CodeGenOpt::Level)options.OptLevel)
+      .setOptLevel((CodeGenOptLevel)options.OptLevel)
       .setTargetOptions(targetOptions);
   bool JIT;
   if (std::optional<CodeModel::Model> CM = unwrap(options.CodeModel, JIT))

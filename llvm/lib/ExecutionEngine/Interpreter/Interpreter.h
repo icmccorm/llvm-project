@@ -283,6 +283,8 @@ public:
   void visitFenceInst(FenceInst &I) {
     // Treated as a no-op
   }
+  void visitAtomicCmpXchgInst(AtomicCmpXchgInst &I);
+  void visitAtomicRMWInst(AtomicRMWInst &I);
   void visitVAStartInst(VAStartInst &I);
   void visitVAEndInst(VAEndInst &I);
   void visitVACopyInst(VACopyInst &I);

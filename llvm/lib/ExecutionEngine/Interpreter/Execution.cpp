@@ -2563,6 +2563,186 @@ void Interpreter::visitInsertValueInst(InsertValueInst &I) {
   }
   SetValue(&I, Dest, SF);
 }
+void Interpreter::visitAtomicCmpXchgInst(AtomicCmpXchgInst &I) {
+  ExecutionContext &SF = Interpreter::context();
+  GenericValue Dest = getOperandValue(I.getPointerOperand(), SF);
+  GenericValue Compare = getOperandValue(I.getCompareOperand(), SF);
+  GenericValue NewVal = getOperandValue(I.getNewValOperand(), SF);
+
+  GenericValue DestContents;
+  GenericValue Result;
+  Type *LoadType = I.getType();
+  if (auto *TETy = dyn_cast<TargetExtType>(LoadType))
+    LoadType = TETy->getLayoutType();
+
+  if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(Dest);
+    LLVM_DEBUG(dbgs() << "Loading value from Miri memory, address: "
+                      << MiriPointerVal.addr << " ");
+    const unsigned LoadBytes = getDataLayout().getTypeStoreSize(LoadType);
+    uint64_t LoadAlign = getDataLayout().getABITypeAlign(LoadType).value();
+    bool status = Interpreter::ExecutionEngine::LoadFromMiriMemory(
+        &DestContents, MiriPointerVal, LoadType, LoadBytes, LoadAlign);
+    if (status) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+  } else {
+    report_fatal_error("Miri isn't initialized.");
+  }
+  GenericValue IsEqual = executeICMP_EQ(Compare, DestContents, LoadType);
+  if (IsEqual.IntVal.getBoolValue()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(Dest);
+    LLVM_DEBUG(dbgs() << "Storing value to Miri memory, address: "
+                      << MiriPointerVal.addr << " ");
+    const unsigned StoreBytes = getDataLayout().getTypeStoreSize(LoadType);
+    uint64_t StoreAlign = getDataLayout().getABITypeAlign(LoadType).value();
+    bool status = Interpreter::ExecutionEngine::StoreToMiriMemory(
+        &Result, MiriPointerVal, LoadType, StoreBytes, StoreAlign);
+    if (status) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+  } else {
+    Result = DestContents;
+  }
+}
+
+void Interpreter::visitAtomicRMWInst(AtomicRMWInst &I) {
+  ExecutionContext &SF = Interpreter::context();
+  GenericValue Dest = getOperandValue(I.getPointerOperand(), SF);
+  GenericValue DestContents;
+  GenericValue Val = getOperandValue(I.getValOperand(), SF);
+
+  GenericValue Result;
+  Type *LoadType = I.getType();
+  if (auto *TETy = dyn_cast<TargetExtType>(LoadType))
+    LoadType = TETy->getLayoutType();
+
+  if (ExecutionEngine::miriIsInitialized()) {
+    MiriPointer MiriPointerVal = GVTOMiriPointer(Dest);
+    LLVM_DEBUG(dbgs() << "Loading value from Miri memory, address: "
+                      << MiriPointerVal.addr << " ");
+    const unsigned LoadBytes = getDataLayout().getTypeStoreSize(LoadType);
+    uint64_t LoadAlign = getDataLayout().getABITypeAlign(LoadType).value();
+    bool status = Interpreter::ExecutionEngine::LoadFromMiriMemory(
+        &DestContents, MiriPointerVal, LoadType, LoadBytes, LoadAlign);
+    if (status) {
+      Interpreter::registerMiriError(I);
+      return;
+    }
+  } else {
+    report_fatal_error("Miri isn't initialized.");
+  }
+
+  switch (I.getOperation()) {
+  case AtomicRMWInst::Xchg:
+    Result = Val;
+    break;
+  case AtomicRMWInst::Add:
+    Result.IntVal = DestContents.IntVal + Val.IntVal;
+    break;
+  case AtomicRMWInst::Sub:
+    Result.IntVal = DestContents.IntVal - Val.IntVal;
+    break;
+  case AtomicRMWInst::And:
+    Result.IntVal = DestContents.IntVal & Val.IntVal;
+    break;
+  case AtomicRMWInst::Nand:
+    Result.IntVal = ~(DestContents.IntVal & Val.IntVal);
+    break;
+  case AtomicRMWInst::Or:
+    Result.IntVal = DestContents.IntVal | Val.IntVal;
+    break;
+  case AtomicRMWInst::Xor:
+    Result.IntVal = DestContents.IntVal ^ Val.IntVal;
+    break;
+  case AtomicRMWInst::Max:
+    if (DestContents.IntVal.sgt(Val.IntVal))
+      Result.IntVal = DestContents.IntVal;
+    else
+      Result.IntVal = Val.IntVal;
+    break;
+  case AtomicRMWInst::Min:
+    if (DestContents.IntVal.slt(Val.IntVal))
+      Result.IntVal = DestContents.IntVal;
+    else
+      Result.IntVal = Val.IntVal;
+    break;
+  case AtomicRMWInst::UMax:
+    if (DestContents.IntVal.ugt(Val.IntVal))
+      Result.IntVal = DestContents.IntVal;
+    else
+      Result.IntVal = Val.IntVal;
+    break;
+  case AtomicRMWInst::UMin:
+    if (DestContents.IntVal.ult(Val.IntVal))
+      Result.IntVal = DestContents.IntVal;
+    else
+      Result.IntVal = Val.IntVal;
+    break;
+  case AtomicRMWInst::FAdd:
+    executeFAddInst(Result, DestContents, Val, LoadType);
+    break;
+  case AtomicRMWInst::FSub:
+    executeFSubInst(Result, DestContents, Val, LoadType);
+    break;
+  case AtomicRMWInst::FMax:
+    switch (LoadType->getTypeID()) {
+    case Type::FloatTyID:
+      Dest.FloatVal = std::fmax(DestContents.FloatVal, Val.FloatVal);
+      break;
+    case Type::DoubleTyID:
+      Dest.DoubleVal = std::fmaxl(DestContents.DoubleVal, Val.DoubleVal);
+      break;
+    default:
+      std::string Message = "Unhandled type for atomicrmw instruction: " +
+                            type_to_string(LoadType);
+      report_fatal_error(Message.c_str());
+    }
+    break;
+  case AtomicRMWInst::FMin:
+    switch (LoadType->getTypeID()) {
+    case Type::FloatTyID:
+      Dest.FloatVal = std::fmin(DestContents.FloatVal, Val.FloatVal);
+      break;
+    case Type::DoubleTyID:
+      Dest.DoubleVal = std::fminl(DestContents.DoubleVal, Val.DoubleVal);
+      break;
+    default:
+      std::string Message = "Unhandled type for atomicrmw instruction: " +
+                            type_to_string(LoadType);
+      report_fatal_error(Message.c_str());
+    }
+    break;
+  case AtomicRMWInst::UIncWrap:
+    if (DestContents.IntVal.uge(Val.IntVal))
+      Result.IntVal = 0;
+    else
+      Result.IntVal = DestContents.IntVal++;
+    break;
+  case AtomicRMWInst::UDecWrap:
+    if (DestContents.IntVal.ult(Val.IntVal) || DestContents.IntVal == 0)
+      Result.IntVal = Val.IntVal;
+    else
+      Result.IntVal = DestContents.IntVal--;
+    break;
+  default:
+    report_fatal_error("Unhandled atomicrmw operation");
+  }
+
+  MiriPointer MiriPointerVal = GVTOMiriPointer(Dest);
+  LLVM_DEBUG(dbgs() << "Storing value to Miri memory, address: "
+                    << MiriPointerVal.addr << " ");
+  const unsigned StoreBytes = getDataLayout().getTypeStoreSize(LoadType);
+  uint64_t StoreAlign = getDataLayout().getABITypeAlign(LoadType).value();
+  bool status = Interpreter::ExecutionEngine::StoreToMiriMemory(
+      &Result, MiriPointerVal, LoadType, StoreBytes, StoreAlign);
+  if (status) {
+    Interpreter::registerMiriError(I);
+    return;
+  }
+}
 
 GenericValue Interpreter::getConstantExprValue(ConstantExpr *CE,
                                                ExecutionContext &SF) {

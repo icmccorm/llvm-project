@@ -822,7 +822,7 @@ Expected<MemorySanitizerOptions> parseMSanPassOptions(StringRef Params) {
   return Result;
 }
 
-Expected<BorrowSanitizerOptions> parseBSanPassOptions(StringRef Params) {
+Expected<BorrowSanitizerOptions> parseBorrowSanitizerPassOptions(StringRef Params) {
   BorrowSanitizerOptions Result;
   return Result;
 }

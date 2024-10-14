@@ -217,8 +217,8 @@ MODULE_PASS_WITH_PARAMS(
     parseStructuralHashPrinterPassOptions, "detailed")
 MODULE_PASS_WITH_PARAMS(
     "bsan", "BorrowSanitizerPass",
-    []() {
-      return BorrowSanitizerPass(dbgs());
+    [](BorrowSanitizerOptions Opts) {
+      return BorrowSanitizerPass(Opts);
     },
     parseBorrowSanitizerPassOptions, "")
 #undef MODULE_PASS_WITH_PARAMS

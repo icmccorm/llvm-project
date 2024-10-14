@@ -17,26 +17,15 @@
 namespace llvm {
 
 struct BorrowSanitizerOptions {
-  BorrowSanitizerOptions() : BorrowSanitizerOptions(){};
-  BorrowSanitizerOptions();
+  BorrowSanitizerOptions(){};
 };
 
-struct BorrowSanitizerPass : public PassInfoMixin<BorrowSanitizerPass> {
-  BorrowSanitizerPass(BorrowSanitizerOptions Options) : Options(Options) {}
-  PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM);
-  static bool isRequired() { return true; }
-
-private:
-  BorrowSanitizerOptions Options;
-};
-
-struct ModuleBorrowSanitizerPass
-    : public PassInfoMixin<ModuleBorrowSanitizerPass> {
-  ModuleBorrowSanitizerPass(BorrowSanitizerOptions Options)
+struct BorrowSanitizerPass
+    : public PassInfoMixin<BorrowSanitizerPass> {
+  BorrowSanitizerPass(BorrowSanitizerOptions Options)
       : Options(Options) {}
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
   static bool isRequired() { return true; }
-
 private:
   BorrowSanitizerOptions Options;
 };

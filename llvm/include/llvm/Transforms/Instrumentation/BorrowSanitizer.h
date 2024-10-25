@@ -20,12 +20,12 @@ struct BorrowSanitizerOptions {
   BorrowSanitizerOptions(){};
 };
 
-struct BorrowSanitizerPass
-    : public PassInfoMixin<BorrowSanitizerPass> {
-  BorrowSanitizerPass(BorrowSanitizerOptions Options)
-      : Options(Options) {}
+struct BorrowSanitizerPass : public PassInfoMixin<BorrowSanitizerPass> {
+  BorrowSanitizerPass(BorrowSanitizerOptions Options) : Options(Options) {}
+
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
   static bool isRequired() { return true; }
+
 private:
   BorrowSanitizerOptions Options;
 };
